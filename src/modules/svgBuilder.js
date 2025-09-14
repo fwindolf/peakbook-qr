@@ -49,7 +49,7 @@ export class SVGBuilder {
             }
 
             // Add framed layout (border + caption above + brand below + QR centered)
-            const framed = await this.addFramedLayout(qrResult, caption || '');
+            const framed = await this.addFramedLayout(qrResult, caption || '', options.logoTheme);
             contentGroup.appendChild(framed);
 
             svg.appendChild(contentGroup);
@@ -69,7 +69,7 @@ export class SVGBuilder {
      * @param {string} caption
      * @returns {Promise<SVGElement>}
      */
-    async addFramedLayout(qrResult, caption) {
+    async addFramedLayout(qrResult, caption, theme = 'light') {
         const group = document.createElementNS(this.svgNS, 'g');
         group.setAttribute('id', 'framed-layout');
 
@@ -135,6 +135,13 @@ export class SVGBuilder {
             qrEmbedded.setAttribute('height', qrSize);
         }
         group.appendChild(qrGroup);
+
+        // Center logo overlay with margin; use opposite theme of selected
+        const oppositeTheme = theme === 'dark' ? 'light' : 'dark';
+        // Use brand logo in the center, not app icon
+        const logoPath = this.config.LOGOS[oppositeTheme] || this.config.LOGOS.light;
+        const logoGroup = await this.addLogoOverlay(logoPath, oppositeTheme);
+        group.appendChild(logoGroup);
 
         // Brand (bottom, inside border)
         const brand = document.createElementNS(this.svgNS, 'text');
@@ -480,14 +487,18 @@ export class SVGBuilder {
         const x = (totalSize - logoSize) / 2;
         const y = (totalSize - logoSize) / 2 - 8; // Match QR positioning
 
-        // Add white background circle for logo
-        const bgCircle = document.createElementNS(this.svgNS, 'circle');
-        bgCircle.setAttribute('cx', x + logoSize / 2);
-        bgCircle.setAttribute('cy', y + logoSize / 2);
-        bgCircle.setAttribute('r', (logoSize + padding * 2) / 2);
-        bgCircle.setAttribute('fill', '#FFFFFF');
-        bgCircle.setAttribute('filter', 'url(#logo-shadow)');
-        group.appendChild(bgCircle);
+        // Add white rounded-rect background (quadratic with rounded corners)
+        const bgRect = document.createElementNS(this.svgNS, 'rect');
+        const bgSize = logoSize + padding * 2;
+        bgRect.setAttribute('x', x - padding);
+        bgRect.setAttribute('y', y - padding);
+        bgRect.setAttribute('width', bgSize);
+        bgRect.setAttribute('height', bgSize);
+        bgRect.setAttribute('rx', Math.floor(bgSize * 0.18));
+        bgRect.setAttribute('ry', Math.floor(bgSize * 0.18));
+        bgRect.setAttribute('fill', '#FFFFFF');
+        bgRect.setAttribute('filter', 'url(#logo-shadow)');
+        group.appendChild(bgRect);
 
         // Try to load and embed the logo SVG
         try {

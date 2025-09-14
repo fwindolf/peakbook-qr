@@ -59,7 +59,7 @@ export const CONFIG = {
 
     // Frame and branding
     FRAME: {
-        PADDING_PX: 10,
+        PADDING_PX: 8,
         RADIUS_PX: 12,
         COLOR: '#2c3239'
     },
@@ -70,7 +70,7 @@ export const CONFIG = {
         FONT_FAMILY: '"Noto Naskh Arabic", Arial, sans-serif',
         FONT_WEIGHT: '700',
         COLOR: '#2c3239',
-        MARGIN_FROM_QR: 8
+        MARGIN_FROM_QR: 4
     },
 
     // Logo Overlay Configuration

@@ -25,7 +25,6 @@ export class QRGenerator {
             type: 'svg',
             data,
             margin: styling.MARGIN,
-            image: imageUrl,
             qrOptions: {
                 errorCorrectionLevel: options.eccLevel || styling.QR_OPTIONS.ERROR_CORRECTION,
                 mode: 'Byte'
@@ -63,6 +62,22 @@ export class QRGenerator {
             }
 
             const qr = new QRCodeStyling(qrStylingOptions);
+
+            // Add background app icon image covering the entire QR area
+            qr.applyExtension((svg, opts) => {
+                try {
+                    const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                    img.setAttribute('x', '0');
+                    img.setAttribute('y', '0');
+                    img.setAttribute('width', String(opts.width || styling.WIDTH));
+                    img.setAttribute('height', String(opts.height || styling.HEIGHT));
+                    img.setAttribute('href', imageUrl);
+                    img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+                    svg.insertBefore(img, svg.firstChild);
+                } catch (_) {
+                    // ignore
+                }
+            });
             const blob = await qr.getRawData('svg');
             const svgText = await blob.text();
 
