@@ -1,14 +1,17 @@
 {
-  "name": "peakbook-qr",
+  "name": "peakbook-admin",
   "private": true,
   "version": "1.0.0",
-  "description": "QR code sticker generator for Peakbook check-in",
+  "description": "Admin platform for Peakbook - peak management, QR generation, translations, and moderation",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src/ --ext js --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint src/ --ext js --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src/ --ext js --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\""
   },
   "dependencies": {
     "qr-code-styling": "^1.9.2",
@@ -19,15 +22,19 @@
     "autoprefixer": "^10.4.16",
     "eslint": "^8.54.0",
     "postcss": "^8.4.32",
+    "prettier": "^3.6.2",
     "tailwindcss": "^3.4.0",
     "vite": "^5.0.10"
   },
   "keywords": [
-    "qr-code",
-    "sticker",
     "peakbook",
-    "svg",
-    "print"
+    "admin",
+    "peaks",
+    "qr-code",
+    "translations",
+    "moderation",
+    "sticker",
+    "svg"
   ],
   "author": "Peakbook",
   "license": "MIT",

@@ -1,835 +1,932 @@
 import { CONFIG, ConfigUtils } from '../config/constants.js';
 
 export class SVGBuilder {
-    constructor() {
-        this.config = CONFIG;
-        this.utils = ConfigUtils;
-        this.svgNS = this.config.EXPORT.SVG_NAMESPACE;
-        this.xlinkNS = this.config.EXPORT.SVG_XLINK_NAMESPACE;
+  constructor() {
+    this.config = CONFIG;
+    this.utils = ConfigUtils;
+    this.svgNS = this.config.EXPORT.SVG_NAMESPACE;
+    this.xlinkNS = this.config.EXPORT.SVG_XLINK_NAMESPACE;
+  }
+
+  /**
+   * Create complete sticker SVG with QR code, logo overlay, and caption
+   * @param {Object} qrResult - QR generation result
+   * @param {string} logoPath - Path to logo SVG
+   * @param {string} caption - Caption text
+   * @param {Object} options - Additional options
+   * @returns {SVGElement} Complete sticker SVG
+   */
+  async createStickerSVG(qrResult, logoPath, caption, options = {}) {
+    this.utils.debug('Creating sticker SVG', { logoPath, caption, options });
+
+    try {
+      // Create main SVG element
+      const svg = this.createMainSVG(options);
+
+      // Create definitions for reusable elements
+      const defs = this.createDefs();
+      svg.appendChild(defs);
+
+      // Add background
+      const background = this.createBackground();
+      svg.appendChild(background);
+
+      // Add trim marks if requested
+      if (options.includeTrimMarks || this.config.INCLUDE_TRIM_MARKS) {
+        const trimMarks = this.createTrimMarks();
+        svg.appendChild(trimMarks);
+      }
+
+      // Create main content group (within safe area)
+      const contentGroup = document.createElementNS(this.svgNS, 'g');
+      contentGroup.setAttribute('id', 'sticker-content');
+
+      // Add clipping path for rounded corners
+      const clipPath = this.createClipPath();
+      defs.appendChild(clipPath);
+      if (options.rounded !== false) {
+        contentGroup.setAttribute('clip-path', 'url(#sticker-clip)');
+      }
+
+      // Add framed layout (outer double border + CTA caption + QR + brand)
+      const framed = await this.addFramedLayout(qrResult, caption || '');
+      contentGroup.appendChild(framed);
+
+      svg.appendChild(contentGroup);
+
+      this.utils.debug('Sticker SVG created successfully');
+      return svg;
+    } catch (error) {
+      this.utils.debug('SVG creation failed', error);
+      throw new Error(`Failed to create sticker SVG: ${error.message}`);
+    }
+  }
+
+  /**
+   * Build framed layout: rounded border sized to dot width, caption above, brand below, QR centered
+   * @param {Object} qrResult
+   * @param {string} caption
+   * @returns {Promise<SVGElement>}
+   */
+  async addFramedLayout(qrResult, caption) {
+    const group = document.createElementNS(this.svgNS, 'g');
+    group.setAttribute('id', 'framed-layout');
+
+    const bleed = this.config.STICKER.BLEED_PX;
+    const size = this.config.STICKER.SIZE_PX;
+    const innerX = bleed + this.config.FRAME.PADDING_PX;
+    const innerY = bleed + this.config.FRAME.PADDING_PX;
+    const innerW = size - this.config.FRAME.PADDING_PX * 2;
+    const innerH = size - this.config.FRAME.PADDING_PX * 2;
+
+    // Compute module size based on intended on-sticker QR size
+    const qrTargetSize = this.config.QR.SIZE_PX;
+    const approxModules = this.config.QR_STYLING.APPROX_MODULES || 33;
+    const moduleSize = Math.max(1, Math.round(qrTargetSize / approxModules));
+
+    // Inner panel background and border (white then dark) consistent with outer
+    const border = document.createElementNS(this.svgNS, 'rect');
+    border.setAttribute('x', innerX);
+    border.setAttribute('y', innerY);
+    border.setAttribute('width', innerW);
+    border.setAttribute('height', innerH);
+    border.setAttribute('rx', this.config.FRAME.RADIUS_PX);
+    border.setAttribute('ry', this.config.FRAME.RADIUS_PX);
+    border.setAttribute('fill', this.config.COLORS.BACKGROUND || '#ffffff');
+    group.appendChild(border);
+
+    // No extra inner strokes to avoid multiple rings; keep clean panel
+
+    // Text areas
+    const captionHeight = caption ? this.config.CAPTION.FONT_SIZE_PX * 1.4 : 0;
+    const brandHeight = this.config.BRAND.FONT_SIZE_PX * 1.4;
+    const spacing = this.config.CAPTION.MARGIN_FROM_QR;
+
+    // Available square area for QR between caption and brand
+    const availableH =
+      innerH - captionHeight - brandHeight - 2 * spacing - moduleSize; // keep a bit off stroke
+    const availableW = innerW - moduleSize; // keep a bit off stroke
+    const qrSize = Math.min(this.config.QR.SIZE_PX, availableH, availableW);
+
+    // Caption (top, inside border)
+    if (caption) {
+      const t = document.createElementNS(this.svgNS, 'text');
+      t.setAttribute('x', innerX + innerW / 2);
+      t.setAttribute('y', innerY + moduleSize / 2 + captionHeight * 0.75);
+      t.setAttribute('text-anchor', 'middle');
+      t.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
+      t.setAttribute('font-size', this.config.CAPTION.FONT_SIZE_PX);
+      t.setAttribute('font-weight', this.config.CAPTION.FONT_WEIGHT);
+      t.setAttribute('fill', this.config.CAPTION.COLOR);
+      t.textContent = caption;
+      group.appendChild(t);
     }
 
-    /**
-     * Create complete sticker SVG with QR code, logo overlay, and caption
-     * @param {Object} qrResult - QR generation result
-     * @param {string} logoPath - Path to logo SVG
-     * @param {string} caption - Caption text
-     * @param {Object} options - Additional options
-     * @returns {SVGElement} Complete sticker SVG
-     */
-    async createStickerSVG(qrResult, logoPath, caption, options = {}) {
-        this.utils.debug('Creating sticker SVG', { logoPath, caption, options });
+    // Add QR, centered between caption and brand
+    const qrGroup = await this.addQRCode(qrResult);
+    const qrX = innerX + (innerW - qrSize) / 2;
+    const qrY =
+      innerY +
+      (caption ? captionHeight + spacing : moduleSize) +
+      (availableH - qrSize) / 2;
+    qrGroup.setAttribute('transform', `translate(${qrX}, ${qrY})`);
 
-        try {
-            // Create main SVG element
-            const svg = this.createMainSVG(options);
-
-            // Create definitions for reusable elements
-            const defs = this.createDefs();
-            svg.appendChild(defs);
-
-            // Add background
-            const background = this.createBackground();
-            svg.appendChild(background);
-
-            // Add trim marks if requested
-            if (options.includeTrimMarks || this.config.INCLUDE_TRIM_MARKS) {
-                const trimMarks = this.createTrimMarks();
-                svg.appendChild(trimMarks);
-            }
-
-            // Create main content group (within safe area)
-            const contentGroup = document.createElementNS(this.svgNS, 'g');
-            contentGroup.setAttribute('id', 'sticker-content');
-
-            // Add clipping path for rounded corners
-            const clipPath = this.createClipPath();
-            defs.appendChild(clipPath);
-            if (options.rounded !== false) {
-                contentGroup.setAttribute('clip-path', 'url(#sticker-clip)');
-            }
-
-            // Add framed layout (outer double border + CTA caption + QR + brand)
-            const framed = await this.addFramedLayout(qrResult, caption || '');
-            contentGroup.appendChild(framed);
-
-            svg.appendChild(contentGroup);
-
-            this.utils.debug('Sticker SVG created successfully');
-            return svg;
-
-        } catch (error) {
-            this.utils.debug('SVG creation failed', error);
-            throw new Error(`Failed to create sticker SVG: ${error.message}`);
+    // Resize embedded qr to qrSize
+    const qrEmbedded = qrGroup.querySelector('svg');
+    if (qrEmbedded) {
+      qrEmbedded.setAttribute('width', qrSize);
+      qrEmbedded.setAttribute('height', qrSize);
+      // Ensure QR primitives use configured colors after embedding
+      qrEmbedded.querySelectorAll('path, rect, circle').forEach((el) => {
+        if (
+          !el.getAttribute('fill') ||
+          el.getAttribute('fill') === '#000' ||
+          el.getAttribute('fill') === '#000000'
+        ) {
+          el.setAttribute('fill', this.config.COLORS.DOTS);
         }
+      });
+      qrEmbedded.querySelectorAll('[stroke]').forEach((el) => {
+        el.setAttribute('stroke', this.config.COLORS.CORNERS);
+      });
     }
+    group.appendChild(qrGroup);
 
-    /**
-     * Build framed layout: rounded border sized to dot width, caption above, brand below, QR centered
-     * @param {Object} qrResult
-     * @param {string} caption
-     * @returns {Promise<SVGElement>}
-     */
-    async addFramedLayout(qrResult, caption) {
-        const group = document.createElementNS(this.svgNS, 'g');
-        group.setAttribute('id', 'framed-layout');
+    // Center logo overlay with margin; single-mode assets
+    const logoPath = this.config.ASSETS.CENTER_ICON;
+    const logoGroup = await this.addLogoOverlay(logoPath);
+    group.appendChild(logoGroup);
 
-        const bleed = this.config.STICKER.BLEED_PX;
-        const size = this.config.STICKER.SIZE_PX;
-        const innerX = bleed + this.config.FRAME.PADDING_PX;
-        const innerY = bleed + this.config.FRAME.PADDING_PX;
-        const innerW = size - this.config.FRAME.PADDING_PX * 2;
-        const innerH = size - this.config.FRAME.PADDING_PX * 2;
+    // Add double border around logo by drawing two rounded rect strokes and masking out dots beneath
+    const logoBorderGroup = document.createElementNS(this.svgNS, 'g');
+    const insetX =
+      qrX +
+      (qrSize - this.config.LOGO.SIZE_PX) / 2 -
+      this.config.LOGO.BACKGROUND_PADDING;
+    const insetY =
+      qrY +
+      (qrSize - this.config.LOGO.SIZE_PX) / 2 -
+      this.config.LOGO.BACKGROUND_PADDING;
+    const bgSize =
+      this.config.LOGO.SIZE_PX + this.config.LOGO.BACKGROUND_PADDING * 2;
 
-        // Compute module size based on intended on-sticker QR size
-        const qrTargetSize = this.config.QR.SIZE_PX;
-        const approxModules = this.config.QR_STYLING.APPROX_MODULES || 33;
-        const moduleSize = Math.max(1, Math.round(qrTargetSize / approxModules));
-
-        // Inner panel background and border (white then dark) consistent with outer
-        const border = document.createElementNS(this.svgNS, 'rect');
-        border.setAttribute('x', innerX);
-        border.setAttribute('y', innerY);
-        border.setAttribute('width', innerW);
-        border.setAttribute('height', innerH);
-        border.setAttribute('rx', this.config.FRAME.RADIUS_PX);
-        border.setAttribute('ry', this.config.FRAME.RADIUS_PX);
-        border.setAttribute('fill', this.config.COLORS.BACKGROUND || '#ffffff');
-        group.appendChild(border);
-
-        // No extra inner strokes to avoid multiple rings; keep clean panel
-
-        // Text areas
-        const captionHeight = caption ? this.config.CAPTION.FONT_SIZE_PX * 1.4 : 0;
-        const brandHeight = this.config.BRAND.FONT_SIZE_PX * 1.4;
-        const spacing = this.config.CAPTION.MARGIN_FROM_QR;
-
-        // Available square area for QR between caption and brand
-        const availableH = innerH - captionHeight - brandHeight - 2 * spacing - moduleSize; // keep a bit off stroke
-        const availableW = innerW - moduleSize; // keep a bit off stroke
-        const qrSize = Math.min(this.config.QR.SIZE_PX, availableH, availableW);
-
-        // Caption (top, inside border)
-        if (caption) {
-            const t = document.createElementNS(this.svgNS, 'text');
-            t.setAttribute('x', innerX + innerW / 2);
-            t.setAttribute('y', innerY + moduleSize / 2 + captionHeight * 0.75);
-            t.setAttribute('text-anchor', 'middle');
-            t.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
-            t.setAttribute('font-size', this.config.CAPTION.FONT_SIZE_PX);
-            t.setAttribute('font-weight', this.config.CAPTION.FONT_WEIGHT);
-            t.setAttribute('fill', this.config.CAPTION.COLOR);
-            t.textContent = caption;
-            group.appendChild(t);
-        }
-
-        // Add QR, centered between caption and brand
-        const qrGroup = await this.addQRCode(qrResult);
-        const qrX = innerX + (innerW - qrSize) / 2;
-        const qrY = innerY + (caption ? captionHeight + spacing : moduleSize) + (availableH - qrSize) / 2;
-        qrGroup.setAttribute('transform', `translate(${qrX}, ${qrY})`);
-
-        // Resize embedded qr to qrSize
-        const qrEmbedded = qrGroup.querySelector('svg');
-        if (qrEmbedded) {
-            qrEmbedded.setAttribute('width', qrSize);
-            qrEmbedded.setAttribute('height', qrSize);
-            // Ensure QR primitives use configured colors after embedding
-            qrEmbedded.querySelectorAll('path, rect, circle').forEach(el => {
-                if (!el.getAttribute('fill') || el.getAttribute('fill') === '#000' || el.getAttribute('fill') === '#000000') {
-                    el.setAttribute('fill', this.config.COLORS.DOTS);
-                }
-            });
-            qrEmbedded.querySelectorAll('[stroke]').forEach(el => {
-                el.setAttribute('stroke', this.config.COLORS.CORNERS);
-            });
-        }
-        group.appendChild(qrGroup);
-
-        // Center logo overlay with margin; single-mode assets
-        const logoPath = this.config.ASSETS.CENTER_ICON;
-        const logoGroup = await this.addLogoOverlay(logoPath);
-        group.appendChild(logoGroup);
-
-        // Add double border around logo by drawing two rounded rect strokes and masking out dots beneath
-        const logoBorderGroup = document.createElementNS(this.svgNS, 'g');
-        const insetX = qrX + (qrSize - this.config.LOGO.SIZE_PX) / 2 - this.config.LOGO.BACKGROUND_PADDING;
-        const insetY = qrY + (qrSize - this.config.LOGO.SIZE_PX) / 2 - this.config.LOGO.BACKGROUND_PADDING;
-        const bgSize = this.config.LOGO.SIZE_PX + this.config.LOGO.BACKGROUND_PADDING * 2;
-
-        // Mask to drop dots behind the logo area
-        const maskId = 'logo-cutout-mask';
-        const mask = document.createElementNS(this.svgNS, 'mask');
-        mask.setAttribute('id', maskId);
-        mask.setAttribute('maskUnits', 'userSpaceOnUse');
-        const maskRect = document.createElementNS(this.svgNS, 'rect');
-        maskRect.setAttribute('x', '0');
-        maskRect.setAttribute('y', '0');
-        maskRect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
-        maskRect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
-        maskRect.setAttribute('fill', 'white');
-        const hole = document.createElementNS(this.svgNS, 'rect');
-        // Slightly inflate hole to be sure all dots are removed under the logo background
-        const inflate = 1.5;
-        hole.setAttribute('x', insetX - inflate);
-        hole.setAttribute('y', insetY - inflate);
-        hole.setAttribute('width', bgSize + inflate * 2);
-        hole.setAttribute('height', bgSize + inflate * 2);
-        hole.setAttribute('rx', Math.floor(bgSize * 0.18));
-        hole.setAttribute('ry', Math.floor(bgSize * 0.18));
-        hole.setAttribute('fill', 'black');
-        mask.appendChild(maskRect);
-        mask.appendChild(hole);
-        // Ensure mask is defined in <defs>
-        const svgRoot = group.ownerSVGElement;
-        let defs = svgRoot?.querySelector('defs');
-        if (!defs && svgRoot) {
-            defs = document.createElementNS(this.svgNS, 'defs');
-            svgRoot.insertBefore(defs, svgRoot.firstChild);
-        }
-        defs?.appendChild(mask);
-
-        // Apply mask to qr group to drop dots under logo
-        qrGroup.setAttribute('mask', `url(#${maskId})`);
-
-        // Outer (dark) stroke
-        const outer = document.createElementNS(this.svgNS, 'rect');
-        outer.setAttribute('x', insetX);
-        outer.setAttribute('y', insetY);
-        outer.setAttribute('width', bgSize);
-        outer.setAttribute('height', bgSize);
-        outer.setAttribute('rx', Math.floor(bgSize * 0.18));
-        outer.setAttribute('ry', Math.floor(bgSize * 0.18));
-        outer.setAttribute('fill', 'none');
-        outer.setAttribute('stroke', this.config.COLORS.CORNERS);
-        outer.setAttribute('stroke-width', Math.max(2, Math.round(this.config.QR.SIZE_PX / 60)));
-        logoBorderGroup.appendChild(outer);
-
-        // Inner (white) stroke
-        const inner = document.createElementNS(this.svgNS, 'rect');
-        const inset = Math.max(2, Math.round(this.config.QR.SIZE_PX / 80));
-        inner.setAttribute('x', insetX + inset);
-        inner.setAttribute('y', insetY + inset);
-        inner.setAttribute('width', bgSize - inset * 2);
-        inner.setAttribute('height', bgSize - inset * 2);
-        inner.setAttribute('rx', Math.floor((bgSize - inset * 2) * 0.18));
-        inner.setAttribute('ry', Math.floor((bgSize - inset * 2) * 0.18));
-        inner.setAttribute('fill', 'none');
-        inner.setAttribute('stroke', '#ffffff');
-        inner.setAttribute('stroke-width', Math.max(2, Math.round(this.config.QR.SIZE_PX / 90)));
-        logoBorderGroup.appendChild(inner);
-
-        group.appendChild(logoBorderGroup);
-
-        // Brand (bottom, inside border)
-        const brand = document.createElementNS(this.svgNS, 'text');
-        brand.setAttribute('x', innerX + innerW / 2);
-        brand.setAttribute('y', innerY + innerH - moduleSize / 2 - brandHeight * 0.3);
-        brand.setAttribute('text-anchor', 'middle');
-        brand.setAttribute('font-family', this.config.BRAND.FONT_FAMILY);
-        brand.setAttribute('font-size', this.config.BRAND.FONT_SIZE_PX);
-        brand.setAttribute('font-weight', this.config.BRAND.FONT_WEIGHT);
-        brand.setAttribute('fill', this.config.COLORS.CORNERS || this.config.BRAND.COLOR);
-        brand.textContent = this.config.BRAND.TEXT;
-        group.appendChild(brand);
-
-        return group;
+    // Mask to drop dots behind the logo area
+    const maskId = 'logo-cutout-mask';
+    const mask = document.createElementNS(this.svgNS, 'mask');
+    mask.setAttribute('id', maskId);
+    mask.setAttribute('maskUnits', 'userSpaceOnUse');
+    const maskRect = document.createElementNS(this.svgNS, 'rect');
+    maskRect.setAttribute('x', '0');
+    maskRect.setAttribute('y', '0');
+    maskRect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
+    maskRect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
+    maskRect.setAttribute('fill', 'white');
+    const hole = document.createElementNS(this.svgNS, 'rect');
+    // Slightly inflate hole to be sure all dots are removed under the logo background
+    const inflate = 1.5;
+    hole.setAttribute('x', insetX - inflate);
+    hole.setAttribute('y', insetY - inflate);
+    hole.setAttribute('width', bgSize + inflate * 2);
+    hole.setAttribute('height', bgSize + inflate * 2);
+    hole.setAttribute('rx', Math.floor(bgSize * 0.18));
+    hole.setAttribute('ry', Math.floor(bgSize * 0.18));
+    hole.setAttribute('fill', 'black');
+    mask.appendChild(maskRect);
+    mask.appendChild(hole);
+    // Ensure mask is defined in <defs>
+    const svgRoot = group.ownerSVGElement;
+    let defs = svgRoot?.querySelector('defs');
+    if (!defs && svgRoot) {
+      defs = document.createElementNS(this.svgNS, 'defs');
+      svgRoot.insertBefore(defs, svgRoot.firstChild);
     }
+    defs?.appendChild(mask);
 
-    /**
-     * Create main SVG container
-     * @param {Object} options - Creation options
-     * @returns {SVGElement} Main SVG element
-     */
-    createMainSVG(options = {}) {
-        const svg = document.createElementNS(this.svgNS, 'svg');
-        const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
+    // Apply mask to qr group to drop dots under logo
+    qrGroup.setAttribute('mask', `url(#${maskId})`);
 
-        svg.setAttribute('width', `${totalSize}`);
-        svg.setAttribute('height', `${totalSize}`);
-        svg.setAttribute('viewBox', `0 0 ${totalSize} ${totalSize}`);
-        svg.setAttribute('xmlns', this.svgNS);
-        svg.setAttribute('xmlns:xlink', this.xlinkNS);
+    // Outer (dark) stroke
+    const outer = document.createElementNS(this.svgNS, 'rect');
+    outer.setAttribute('x', insetX);
+    outer.setAttribute('y', insetY);
+    outer.setAttribute('width', bgSize);
+    outer.setAttribute('height', bgSize);
+    outer.setAttribute('rx', Math.floor(bgSize * 0.18));
+    outer.setAttribute('ry', Math.floor(bgSize * 0.18));
+    outer.setAttribute('fill', 'none');
+    outer.setAttribute('stroke', this.config.COLORS.CORNERS);
+    outer.setAttribute(
+      'stroke-width',
+      Math.max(2, Math.round(this.config.QR.SIZE_PX / 60))
+    );
+    logoBorderGroup.appendChild(outer);
 
-        // Add metadata
-        svg.setAttribute('data-generator', 'Peakbook QR Generator');
-        svg.setAttribute('data-version', '1.0');
-        svg.setAttribute('data-print-size', `${this.config.STICKER.SIZE_CM}cm`);
-        svg.setAttribute('data-bleed', `${this.config.STICKER.BLEED_CM}cm`);
+    // Inner (white) stroke
+    const inner = document.createElementNS(this.svgNS, 'rect');
+    const inset = Math.max(2, Math.round(this.config.QR.SIZE_PX / 80));
+    inner.setAttribute('x', insetX + inset);
+    inner.setAttribute('y', insetY + inset);
+    inner.setAttribute('width', bgSize - inset * 2);
+    inner.setAttribute('height', bgSize - inset * 2);
+    inner.setAttribute('rx', Math.floor((bgSize - inset * 2) * 0.18));
+    inner.setAttribute('ry', Math.floor((bgSize - inset * 2) * 0.18));
+    inner.setAttribute('fill', 'none');
+    inner.setAttribute('stroke', '#ffffff');
+    inner.setAttribute(
+      'stroke-width',
+      Math.max(2, Math.round(this.config.QR.SIZE_PX / 90))
+    );
+    logoBorderGroup.appendChild(inner);
 
-        // Add title and description for accessibility
-        const title = document.createElementNS(this.svgNS, 'title');
-        title.textContent = 'Peakbook QR Code Sticker';
-        svg.appendChild(title);
+    group.appendChild(logoBorderGroup);
 
-        const desc = document.createElementNS(this.svgNS, 'desc');
-        desc.textContent = `QR code sticker for Peakbook check-in, ${this.config.STICKER.SIZE_CM}cm × ${this.config.STICKER.SIZE_CM}cm with ${this.config.STICKER.BLEED_CM}cm bleed`;
-        svg.appendChild(desc);
+    // Brand (bottom, inside border)
+    const brand = document.createElementNS(this.svgNS, 'text');
+    brand.setAttribute('x', innerX + innerW / 2);
+    brand.setAttribute(
+      'y',
+      innerY + innerH - moduleSize / 2 - brandHeight * 0.3
+    );
+    brand.setAttribute('text-anchor', 'middle');
+    brand.setAttribute('font-family', this.config.BRAND.FONT_FAMILY);
+    brand.setAttribute('font-size', this.config.BRAND.FONT_SIZE_PX);
+    brand.setAttribute('font-weight', this.config.BRAND.FONT_WEIGHT);
+    brand.setAttribute(
+      'fill',
+      this.config.COLORS.CORNERS || this.config.BRAND.COLOR
+    );
+    brand.textContent = this.config.BRAND.TEXT;
+    group.appendChild(brand);
 
-        return svg;
-    }
+    return group;
+  }
 
-    /**
-     * Create SVG definitions section
-     * @returns {SVGElement} Defs element
-     */
-    createDefs() {
-        const defs = document.createElementNS(this.svgNS, 'defs');
+  /**
+   * Create main SVG container
+   * @param {Object} options - Creation options
+   * @returns {SVGElement} Main SVG element
+   */
+  createMainSVG(options = {}) {
+    const svg = document.createElementNS(this.svgNS, 'svg');
+    const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
 
-        // Add drop shadow filter for logo
-        const filter = this.createShadowFilter();
-        defs.appendChild(filter);
+    svg.setAttribute('width', `${totalSize}`);
+    svg.setAttribute('height', `${totalSize}`);
+    svg.setAttribute('viewBox', `0 0 ${totalSize} ${totalSize}`);
+    svg.setAttribute('xmlns', this.svgNS);
+    svg.setAttribute('xmlns:xlink', this.xlinkNS);
 
-        // Add gradient for potential future use
-        const gradient = this.createGradient();
-        defs.appendChild(gradient);
+    // Add metadata
+    svg.setAttribute('data-generator', 'Peakbook QR Generator');
+    svg.setAttribute('data-version', '1.0');
+    svg.setAttribute('data-print-size', `${this.config.STICKER.SIZE_CM}cm`);
+    svg.setAttribute('data-bleed', `${this.config.STICKER.BLEED_CM}cm`);
 
-        return defs;
-    }
+    // Add title and description for accessibility
+    const title = document.createElementNS(this.svgNS, 'title');
+    title.textContent = 'Peakbook QR Code Sticker';
+    svg.appendChild(title);
 
-    /**
-     * Create drop shadow filter
-     * @returns {SVGElement} Filter element
-     */
-    createShadowFilter() {
-        const filter = document.createElementNS(this.svgNS, 'filter');
-        filter.setAttribute('id', 'logo-shadow');
-        filter.setAttribute('x', '-20%');
-        filter.setAttribute('y', '-20%');
-        filter.setAttribute('width', '140%');
-        filter.setAttribute('height', '140%');
+    const desc = document.createElementNS(this.svgNS, 'desc');
+    desc.textContent = `QR code sticker for Peakbook check-in, ${this.config.STICKER.SIZE_CM}cm × ${this.config.STICKER.SIZE_CM}cm with ${this.config.STICKER.BLEED_CM}cm bleed`;
+    svg.appendChild(desc);
 
-        // Gaussian blur for shadow
-        const feGaussianBlur = document.createElementNS(this.svgNS, 'feGaussianBlur');
-        feGaussianBlur.setAttribute('in', 'SourceAlpha');
-        feGaussianBlur.setAttribute('stdDeviation', this.config.LOGO.SHADOW_BLUR);
-        feGaussianBlur.setAttribute('result', 'blur');
+    return svg;
+  }
 
-        // Offset shadow
-        const feOffset = document.createElementNS(this.svgNS, 'feOffset');
-        feOffset.setAttribute('in', 'blur');
-        feOffset.setAttribute('dx', '0');
-        feOffset.setAttribute('dy', '1');
-        feOffset.setAttribute('result', 'offsetBlur');
+  /**
+   * Create SVG definitions section
+   * @returns {SVGElement} Defs element
+   */
+  createDefs() {
+    const defs = document.createElementNS(this.svgNS, 'defs');
 
-        // Adjust shadow opacity
-        const feComponentTransfer = document.createElementNS(this.svgNS, 'feComponentTransfer');
-        feComponentTransfer.setAttribute('in', 'offsetBlur');
-        feComponentTransfer.setAttribute('result', 'shadow');
+    // Add drop shadow filter for logo
+    const filter = this.createShadowFilter();
+    defs.appendChild(filter);
 
-        const feFuncA = document.createElementNS(this.svgNS, 'feFuncA');
-        feFuncA.setAttribute('type', 'linear');
-        feFuncA.setAttribute('slope', this.config.LOGO.SHADOW_OPACITY);
+    // Add gradient for potential future use
+    const gradient = this.createGradient();
+    defs.appendChild(gradient);
 
-        feComponentTransfer.appendChild(feFuncA);
+    return defs;
+  }
 
-        // Merge with original
-        const feMerge = document.createElementNS(this.svgNS, 'feMerge');
+  /**
+   * Create drop shadow filter
+   * @returns {SVGElement} Filter element
+   */
+  createShadowFilter() {
+    const filter = document.createElementNS(this.svgNS, 'filter');
+    filter.setAttribute('id', 'logo-shadow');
+    filter.setAttribute('x', '-20%');
+    filter.setAttribute('y', '-20%');
+    filter.setAttribute('width', '140%');
+    filter.setAttribute('height', '140%');
 
-        const feMergeNode1 = document.createElementNS(this.svgNS, 'feMergeNode');
-        feMergeNode1.setAttribute('in', 'shadow');
+    // Gaussian blur for shadow
+    const feGaussianBlur = document.createElementNS(
+      this.svgNS,
+      'feGaussianBlur'
+    );
+    feGaussianBlur.setAttribute('in', 'SourceAlpha');
+    feGaussianBlur.setAttribute('stdDeviation', this.config.LOGO.SHADOW_BLUR);
+    feGaussianBlur.setAttribute('result', 'blur');
 
-        const feMergeNode2 = document.createElementNS(this.svgNS, 'feMergeNode');
-        feMergeNode2.setAttribute('in', 'SourceGraphic');
+    // Offset shadow
+    const feOffset = document.createElementNS(this.svgNS, 'feOffset');
+    feOffset.setAttribute('in', 'blur');
+    feOffset.setAttribute('dx', '0');
+    feOffset.setAttribute('dy', '1');
+    feOffset.setAttribute('result', 'offsetBlur');
 
-        feMerge.appendChild(feMergeNode1);
-        feMerge.appendChild(feMergeNode2);
+    // Adjust shadow opacity
+    const feComponentTransfer = document.createElementNS(
+      this.svgNS,
+      'feComponentTransfer'
+    );
+    feComponentTransfer.setAttribute('in', 'offsetBlur');
+    feComponentTransfer.setAttribute('result', 'shadow');
 
-        filter.appendChild(feGaussianBlur);
-        filter.appendChild(feOffset);
-        filter.appendChild(feComponentTransfer);
-        filter.appendChild(feMerge);
+    const feFuncA = document.createElementNS(this.svgNS, 'feFuncA');
+    feFuncA.setAttribute('type', 'linear');
+    feFuncA.setAttribute('slope', this.config.LOGO.SHADOW_OPACITY);
 
-        return filter;
-    }
+    feComponentTransfer.appendChild(feFuncA);
 
-    /**
-     * Create gradient definition
-     * @returns {SVGElement} Gradient element
-     */
-    createGradient() {
-        const gradient = document.createElementNS(this.svgNS, 'radialGradient');
-        gradient.setAttribute('id', 'logo-gradient');
-        gradient.setAttribute('cx', '50%');
-        gradient.setAttribute('cy', '50%');
-        gradient.setAttribute('r', '50%');
+    // Merge with original
+    const feMerge = document.createElementNS(this.svgNS, 'feMerge');
 
-        const stop1 = document.createElementNS(this.svgNS, 'stop');
-        stop1.setAttribute('offset', '0%');
-        stop1.setAttribute('stop-color', '#ffffff');
-        stop1.setAttribute('stop-opacity', '1');
+    const feMergeNode1 = document.createElementNS(this.svgNS, 'feMergeNode');
+    feMergeNode1.setAttribute('in', 'shadow');
 
-        const stop2 = document.createElementNS(this.svgNS, 'stop');
-        stop2.setAttribute('offset', '100%');
-        stop2.setAttribute('stop-color', '#ffffff');
-        stop2.setAttribute('stop-opacity', '0.8');
+    const feMergeNode2 = document.createElementNS(this.svgNS, 'feMergeNode');
+    feMergeNode2.setAttribute('in', 'SourceGraphic');
 
-        gradient.appendChild(stop1);
-        gradient.appendChild(stop2);
+    feMerge.appendChild(feMergeNode1);
+    feMerge.appendChild(feMergeNode2);
 
-        return gradient;
-    }
+    filter.appendChild(feGaussianBlur);
+    filter.appendChild(feOffset);
+    filter.appendChild(feComponentTransfer);
+    filter.appendChild(feMerge);
 
-    /**
-     * Create background rectangle
-     * @returns {SVGElement} Background rect
-     */
-    createBackground() {
-        // Full background color
-        const rect = document.createElementNS(this.svgNS, 'rect');
-        rect.setAttribute('id', 'background');
-        rect.setAttribute('x', '0');
-        rect.setAttribute('y', '0');
-        rect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
-        rect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
-        rect.setAttribute('fill', this.config.COLORS.BACKGROUND || '#FFFFFF');
+    return filter;
+  }
 
-        // Outer double border (white then dark) aligned to bleed edge
-        const outerGroup = document.createElementNS(this.svgNS, 'g');
-        const total = this.config.STICKER.TOTAL_SIZE_PX;
-        const r = this.config.STICKER.CORNER_RADIUS_PX;
-        const outerStroke = this.config.FRAME.OUTER_STROKE_PX;
-        const innerStroke = this.config.FRAME.OUTER_INNER_STROKE_PX;
+  /**
+   * Create gradient definition
+   * @returns {SVGElement} Gradient element
+   */
+  createGradient() {
+    const gradient = document.createElementNS(this.svgNS, 'radialGradient');
+    gradient.setAttribute('id', 'logo-gradient');
+    gradient.setAttribute('cx', '50%');
+    gradient.setAttribute('cy', '50%');
+    gradient.setAttribute('r', '50%');
 
-        const whiteBorder = document.createElementNS(this.svgNS, 'rect');
-        whiteBorder.setAttribute('x', outerStroke / 2);
-        whiteBorder.setAttribute('y', outerStroke / 2);
-        whiteBorder.setAttribute('width', total - outerStroke);
-        whiteBorder.setAttribute('height', total - outerStroke);
-        whiteBorder.setAttribute('rx', r);
-        whiteBorder.setAttribute('ry', r);
-        whiteBorder.setAttribute('fill', 'none');
-        whiteBorder.setAttribute('stroke', '#ffffff');
-        whiteBorder.setAttribute('stroke-width', outerStroke);
+    const stop1 = document.createElementNS(this.svgNS, 'stop');
+    stop1.setAttribute('offset', '0%');
+    stop1.setAttribute('stop-color', '#ffffff');
+    stop1.setAttribute('stop-opacity', '1');
 
-        const darkBorder = document.createElementNS(this.svgNS, 'rect');
-        const darkInset = outerStroke + innerStroke / 2;
-        darkBorder.setAttribute('x', darkInset);
-        darkBorder.setAttribute('y', darkInset);
-        darkBorder.setAttribute('width', total - darkInset * 2);
-        darkBorder.setAttribute('height', total - darkInset * 2);
-        darkBorder.setAttribute('rx', r);
-        darkBorder.setAttribute('ry', r);
-        darkBorder.setAttribute('fill', 'none');
-        darkBorder.setAttribute('stroke', this.config.COLORS.BORDER || this.config.FRAME.COLOR);
-        darkBorder.setAttribute('stroke-width', innerStroke);
+    const stop2 = document.createElementNS(this.svgNS, 'stop');
+    stop2.setAttribute('offset', '100%');
+    stop2.setAttribute('stop-color', '#ffffff');
+    stop2.setAttribute('stop-opacity', '0.8');
 
-        outerGroup.appendChild(whiteBorder);
-        outerGroup.appendChild(darkBorder);
+    gradient.appendChild(stop1);
+    gradient.appendChild(stop2);
 
-        const group = document.createElementNS(this.svgNS, 'g');
-        group.appendChild(rect);
-        group.appendChild(outerGroup);
-        return group;
-    }
+    return gradient;
+  }
 
-    /**
-     * Create clipping path for rounded corners
-     * @returns {SVGElement} ClipPath element
-     */
-    createClipPath() {
-        const clipPath = document.createElementNS(this.svgNS, 'clipPath');
-        clipPath.setAttribute('id', 'sticker-clip');
+  /**
+   * Create background rectangle
+   * @returns {SVGElement} Background rect
+   */
+  createBackground() {
+    // Full background color
+    const rect = document.createElementNS(this.svgNS, 'rect');
+    rect.setAttribute('id', 'background');
+    rect.setAttribute('x', '0');
+    rect.setAttribute('y', '0');
+    rect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
+    rect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
+    rect.setAttribute('fill', this.config.COLORS.BACKGROUND || '#FFFFFF');
 
-        const rect = document.createElementNS(this.svgNS, 'rect');
-        const bleed = this.config.STICKER.BLEED_PX;
-        const size = this.config.STICKER.SIZE_PX;
+    // Outer double border (white then dark) aligned to bleed edge
+    const outerGroup = document.createElementNS(this.svgNS, 'g');
+    const total = this.config.STICKER.TOTAL_SIZE_PX;
+    const r = this.config.STICKER.CORNER_RADIUS_PX;
+    const outerStroke = this.config.FRAME.OUTER_STROKE_PX;
+    const innerStroke = this.config.FRAME.OUTER_INNER_STROKE_PX;
 
-        rect.setAttribute('x', bleed);
-        rect.setAttribute('y', bleed);
-        rect.setAttribute('width', size);
-        rect.setAttribute('height', size);
-        rect.setAttribute('rx', this.config.STICKER.CORNER_RADIUS_PX);
-        rect.setAttribute('ry', this.config.STICKER.CORNER_RADIUS_PX);
+    const whiteBorder = document.createElementNS(this.svgNS, 'rect');
+    whiteBorder.setAttribute('x', outerStroke / 2);
+    whiteBorder.setAttribute('y', outerStroke / 2);
+    whiteBorder.setAttribute('width', total - outerStroke);
+    whiteBorder.setAttribute('height', total - outerStroke);
+    whiteBorder.setAttribute('rx', r);
+    whiteBorder.setAttribute('ry', r);
+    whiteBorder.setAttribute('fill', 'none');
+    whiteBorder.setAttribute('stroke', '#ffffff');
+    whiteBorder.setAttribute('stroke-width', outerStroke);
 
-        clipPath.appendChild(rect);
-        return clipPath;
-    }
+    const darkBorder = document.createElementNS(this.svgNS, 'rect');
+    const darkInset = outerStroke + innerStroke / 2;
+    darkBorder.setAttribute('x', darkInset);
+    darkBorder.setAttribute('y', darkInset);
+    darkBorder.setAttribute('width', total - darkInset * 2);
+    darkBorder.setAttribute('height', total - darkInset * 2);
+    darkBorder.setAttribute('rx', r);
+    darkBorder.setAttribute('ry', r);
+    darkBorder.setAttribute('fill', 'none');
+    darkBorder.setAttribute(
+      'stroke',
+      this.config.COLORS.BORDER || this.config.FRAME.COLOR
+    );
+    darkBorder.setAttribute('stroke-width', innerStroke);
 
-    /**
-     * Create trim marks for professional printing
-     * @returns {SVGElement} Trim marks group
-     */
-    createTrimMarks() {
-        const group = document.createElementNS(this.svgNS, 'g');
-        group.setAttribute('id', 'trim-marks');
-        group.setAttribute('stroke', '#000000');
-        group.setAttribute('stroke-width', '0.25');
-        group.setAttribute('opacity', '0.5');
-        group.setAttribute('fill', 'none');
+    outerGroup.appendChild(whiteBorder);
+    outerGroup.appendChild(darkBorder);
 
-        const bleed = this.config.STICKER.BLEED_PX;
-        const size = this.config.STICKER.SIZE_PX;
-        const markLength = 8;
-        const markOffset = 2;
+    const group = document.createElementNS(this.svgNS, 'g');
+    group.appendChild(rect);
+    group.appendChild(outerGroup);
+    return group;
+  }
 
-        // Corner trim marks
-        const marks = [
-            // Top-left corner
-            { x1: bleed - markOffset, y1: bleed - markLength - markOffset, x2: bleed - markOffset, y2: bleed - markOffset },
-            { x1: bleed - markLength - markOffset, y1: bleed - markOffset, x2: bleed - markOffset, y2: bleed - markOffset },
+  /**
+   * Create clipping path for rounded corners
+   * @returns {SVGElement} ClipPath element
+   */
+  createClipPath() {
+    const clipPath = document.createElementNS(this.svgNS, 'clipPath');
+    clipPath.setAttribute('id', 'sticker-clip');
 
-            // Top-right corner
-            { x1: bleed + size + markOffset, y1: bleed - markLength - markOffset, x2: bleed + size + markOffset, y2: bleed - markOffset },
-            { x1: bleed + size + markOffset, y1: bleed - markOffset, x2: bleed + size + markLength + markOffset, y2: bleed - markOffset },
+    const rect = document.createElementNS(this.svgNS, 'rect');
+    const bleed = this.config.STICKER.BLEED_PX;
+    const size = this.config.STICKER.SIZE_PX;
 
-            // Bottom-left corner
-            { x1: bleed - markOffset, y1: bleed + size + markOffset, x2: bleed - markOffset, y2: bleed + size + markLength + markOffset },
-            { x1: bleed - markLength - markOffset, y1: bleed + size + markOffset, x2: bleed - markOffset, y2: bleed + size + markOffset },
+    rect.setAttribute('x', bleed);
+    rect.setAttribute('y', bleed);
+    rect.setAttribute('width', size);
+    rect.setAttribute('height', size);
+    rect.setAttribute('rx', this.config.STICKER.CORNER_RADIUS_PX);
+    rect.setAttribute('ry', this.config.STICKER.CORNER_RADIUS_PX);
 
-            // Bottom-right corner
-            { x1: bleed + size + markOffset, y1: bleed + size + markOffset, x2: bleed + size + markOffset, y2: bleed + size + markLength + markOffset },
-            { x1: bleed + size + markOffset, y1: bleed + size + markOffset, x2: bleed + size + markLength + markOffset, y2: bleed + size + markOffset }
-        ];
+    clipPath.appendChild(rect);
+    return clipPath;
+  }
 
-        marks.forEach((mark, index) => {
-            const line = document.createElementNS(this.svgNS, 'line');
-            line.setAttribute('x1', mark.x1);
-            line.setAttribute('y1', mark.y1);
-            line.setAttribute('x2', mark.x2);
-            line.setAttribute('y2', mark.y2);
-            line.setAttribute('class', 'trim-mark');
-            group.appendChild(line);
+  /**
+   * Create trim marks for professional printing
+   * @returns {SVGElement} Trim marks group
+   */
+  createTrimMarks() {
+    const group = document.createElementNS(this.svgNS, 'g');
+    group.setAttribute('id', 'trim-marks');
+    group.setAttribute('stroke', '#000000');
+    group.setAttribute('stroke-width', '0.25');
+    group.setAttribute('opacity', '0.5');
+    group.setAttribute('fill', 'none');
+
+    const bleed = this.config.STICKER.BLEED_PX;
+    const size = this.config.STICKER.SIZE_PX;
+    const markLength = 8;
+    const markOffset = 2;
+
+    // Corner trim marks
+    const marks = [
+      // Top-left corner
+      {
+        x1: bleed - markOffset,
+        y1: bleed - markLength - markOffset,
+        x2: bleed - markOffset,
+        y2: bleed - markOffset,
+      },
+      {
+        x1: bleed - markLength - markOffset,
+        y1: bleed - markOffset,
+        x2: bleed - markOffset,
+        y2: bleed - markOffset,
+      },
+
+      // Top-right corner
+      {
+        x1: bleed + size + markOffset,
+        y1: bleed - markLength - markOffset,
+        x2: bleed + size + markOffset,
+        y2: bleed - markOffset,
+      },
+      {
+        x1: bleed + size + markOffset,
+        y1: bleed - markOffset,
+        x2: bleed + size + markLength + markOffset,
+        y2: bleed - markOffset,
+      },
+
+      // Bottom-left corner
+      {
+        x1: bleed - markOffset,
+        y1: bleed + size + markOffset,
+        x2: bleed - markOffset,
+        y2: bleed + size + markLength + markOffset,
+      },
+      {
+        x1: bleed - markLength - markOffset,
+        y1: bleed + size + markOffset,
+        x2: bleed - markOffset,
+        y2: bleed + size + markOffset,
+      },
+
+      // Bottom-right corner
+      {
+        x1: bleed + size + markOffset,
+        y1: bleed + size + markOffset,
+        x2: bleed + size + markOffset,
+        y2: bleed + size + markLength + markOffset,
+      },
+      {
+        x1: bleed + size + markOffset,
+        y1: bleed + size + markOffset,
+        x2: bleed + size + markLength + markOffset,
+        y2: bleed + size + markOffset,
+      },
+    ];
+
+    marks.forEach((mark, index) => {
+      const line = document.createElementNS(this.svgNS, 'line');
+      line.setAttribute('x1', mark.x1);
+      line.setAttribute('y1', mark.y1);
+      line.setAttribute('x2', mark.x2);
+      line.setAttribute('y2', mark.y2);
+      line.setAttribute('class', 'trim-mark');
+      group.appendChild(line);
+    });
+
+    return group;
+  }
+
+  /**
+   * Add QR code to sticker
+   * @param {Object} qrResult - QR generation result
+   * @returns {SVGElement} QR code group
+   */
+  async addQRCode(qrResult) {
+    this.utils.debug('Adding QR code to sticker', {
+      hasQrResult: !!qrResult,
+      keys: Object.keys(qrResult),
+    });
+
+    const group = document.createElementNS(this.svgNS, 'g');
+    group.setAttribute('id', 'qr-code');
+
+    // Calculate position to center QR code
+    const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
+    const qrSize = this.config.QR.SIZE_PX;
+    const x = (totalSize - qrSize) / 2;
+    const y = (totalSize - qrSize) / 2; // center vertically; caption is handled in framed layout
+
+    group.setAttribute('transform', `translate(${x}, ${y})`);
+
+    // Check if we have the SVG element
+    if (!qrResult.svgElement) {
+      this.utils.debug(
+        'No svgElement in qrResult, trying to create from string'
+      );
+
+      if (qrResult.svgString) {
+        // Parse SVG string directly
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(qrResult.svgString, 'image/svg+xml');
+        qrResult.svgElement = doc.documentElement;
+        this.utils.debug('Created svgElement from string', {
+          tagName: qrResult.svgElement.tagName,
         });
-
-        return group;
+      } else {
+        throw new Error('No SVG element or string found in QR result');
+      }
     }
 
-    /**
-     * Add QR code to sticker
-     * @param {Object} qrResult - QR generation result
-     * @returns {SVGElement} QR code group
-     */
-    async addQRCode(qrResult) {
-        this.utils.debug('Adding QR code to sticker', { hasQrResult: !!qrResult, keys: Object.keys(qrResult) });
+    // Clone the QR SVG content
+    const qrSvg = qrResult.svgElement;
+    this.utils.debug('Working with QR SVG', {
+      tagName: qrSvg.tagName,
+      hasChildren: qrSvg.children.length,
+    });
 
-        const group = document.createElementNS(this.svgNS, 'g');
-        group.setAttribute('id', 'qr-code');
+    // Method: Embed the QR SVG directly and size it to our target
+    try {
+      const qrContent = qrSvg.cloneNode(true);
 
-        // Calculate position to center QR code
-        const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
-        const qrSize = this.config.QR.SIZE_PX;
-        const x = (totalSize - qrSize) / 2;
-        const y = (totalSize - qrSize) / 2; // center vertically; caption is handled in framed layout
+      // Ensure predictable sizing
+      qrContent.setAttribute('width', qrSize);
+      qrContent.setAttribute('height', qrSize);
 
-        group.setAttribute('transform', `translate(${x}, ${y})`);
+      // Preserve or set viewBox for proper scaling
+      const currentViewBox = qrSvg.getAttribute('viewBox');
+      if (currentViewBox) {
+        qrContent.setAttribute('viewBox', currentViewBox);
+      } else {
+        const currentWidth = parseInt(qrSvg.getAttribute('width')) || qrSize;
+        const currentHeight = parseInt(qrSvg.getAttribute('height')) || qrSize;
+        qrContent.setAttribute(
+          'viewBox',
+          `0 0 ${currentWidth} ${currentHeight}`
+        );
+      }
 
-        // Check if we have the SVG element
-        if (!qrResult.svgElement) {
-            this.utils.debug('No svgElement in qrResult, trying to create from string');
+      // Keep aspect ratio and center within the slot
+      qrContent.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-            if (qrResult.svgString) {
-                // Parse SVG string directly
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(qrResult.svgString, 'image/svg+xml');
-                qrResult.svgElement = doc.documentElement;
-                this.utils.debug('Created svgElement from string', { tagName: qrResult.svgElement.tagName });
-            } else {
-                throw new Error('No SVG element or string found in QR result');
-            }
-        }
+      // Append the full QR SVG so coordinates and sizing are preserved
+      group.appendChild(qrContent);
 
-        // Clone the QR SVG content
-        const qrSvg = qrResult.svgElement;
-        this.utils.debug('Working with QR SVG', { tagName: qrSvg.tagName, hasChildren: qrSvg.children.length });
+      this.utils.debug('QR code added successfully');
+      return group;
+    } catch (error) {
+      this.utils.debug('Error adding QR code', error);
 
-        // Method: Embed the QR SVG directly and size it to our target
-        try {
-            const qrContent = qrSvg.cloneNode(true);
+      // Method 3: Fallback - create a simple placeholder
+      const rect = document.createElementNS(this.svgNS, 'rect');
+      rect.setAttribute('width', qrSize);
+      rect.setAttribute('height', qrSize);
+      rect.setAttribute('fill', '#000000');
+      group.appendChild(rect);
 
-            // Ensure predictable sizing
-            qrContent.setAttribute('width', qrSize);
-            qrContent.setAttribute('height', qrSize);
+      const text = document.createElementNS(this.svgNS, 'text');
+      text.setAttribute('x', qrSize / 2);
+      text.setAttribute('y', qrSize / 2);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('dominant-baseline', 'middle');
+      text.setAttribute('fill', '#FFFFFF');
+      text.setAttribute('font-size', '12');
+      text.textContent = 'QR ERROR';
+      group.appendChild(text);
 
-            // Preserve or set viewBox for proper scaling
-            const currentViewBox = qrSvg.getAttribute('viewBox');
-            if (currentViewBox) {
-                qrContent.setAttribute('viewBox', currentViewBox);
-            } else {
-                const currentWidth = parseInt(qrSvg.getAttribute('width')) || qrSize;
-                const currentHeight = parseInt(qrSvg.getAttribute('height')) || qrSize;
-                qrContent.setAttribute('viewBox', `0 0 ${currentWidth} ${currentHeight}`);
-            }
+      console.error('QR code generation failed, showing placeholder', error);
+      return group;
+    }
+  }
 
-            // Keep aspect ratio and center within the slot
-            qrContent.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  /**
+   * Add logo overlay to center of QR code
+   * @param {string} logoPath - Path to logo file
+   * @param {string} theme - Logo theme (light/dark)
+   * @returns {Promise<SVGElement>} Logo group
+   */
+  async addLogoOverlay(logoPath, theme = 'light') {
+    const group = document.createElementNS(this.svgNS, 'g');
+    group.setAttribute('id', 'logo-overlay');
 
-            // Append the full QR SVG so coordinates and sizing are preserved
-            group.appendChild(qrContent);
+    // Calculate center position
+    const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
+    const logoSize = this.config.LOGO.SIZE_PX;
+    const padding = this.config.LOGO.BACKGROUND_PADDING;
+    const x = (totalSize - logoSize) / 2;
+    const y = (totalSize - logoSize) / 2; // center
 
-            this.utils.debug('QR code added successfully');
-            return group;
+    // Add white rounded-rect background (quadratic with rounded corners)
+    const bgRect = document.createElementNS(this.svgNS, 'rect');
+    const bgSize = logoSize + padding * 2;
+    bgRect.setAttribute('x', x - padding);
+    bgRect.setAttribute('y', y - padding);
+    bgRect.setAttribute('width', bgSize);
+    bgRect.setAttribute('height', bgSize);
+    bgRect.setAttribute('rx', Math.floor(bgSize * 0.18));
+    bgRect.setAttribute('ry', Math.floor(bgSize * 0.18));
+    bgRect.setAttribute('fill', '#FFFFFF');
+    bgRect.setAttribute('filter', 'url(#logo-shadow)');
+    group.appendChild(bgRect);
 
-        } catch (error) {
-            this.utils.debug('Error adding QR code', error);
+    // Try to load and embed the logo SVG
+    try {
+      const logoSvg = await this.loadLogoSVG(logoPath);
+      if (logoSvg) {
+        // Clone and resize logo
+        const logo = logoSvg.cloneNode(true);
+        logo.setAttribute('x', x);
+        logo.setAttribute('y', y);
+        logo.setAttribute('width', logoSize);
+        logo.setAttribute('height', logoSize);
+        group.appendChild(logo);
+      } else {
+        // Fallback: use image element
+        const image = document.createElementNS(this.svgNS, 'image');
+        image.setAttribute('x', x);
+        image.setAttribute('y', y);
+        image.setAttribute('width', logoSize);
+        image.setAttribute('height', logoSize);
+        image.setAttribute('href', logoPath);
+        image.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        group.appendChild(image);
+      }
+    } catch (error) {
+      this.utils.debug('Logo loading failed, using fallback', error);
 
-            // Method 3: Fallback - create a simple placeholder
-            const rect = document.createElementNS(this.svgNS, 'rect');
-            rect.setAttribute('width', qrSize);
-            rect.setAttribute('height', qrSize);
-            rect.setAttribute('fill', '#000000');
-            group.appendChild(rect);
+      // Simple fallback logo (circle with "P")
+      const fallbackCircle = document.createElementNS(this.svgNS, 'circle');
+      fallbackCircle.setAttribute('cx', x + logoSize / 2);
+      fallbackCircle.setAttribute('cy', y + logoSize / 2);
+      fallbackCircle.setAttribute('r', logoSize / 2 - 2);
+      fallbackCircle.setAttribute('fill', '#2563eb');
+      group.appendChild(fallbackCircle);
 
-            const text = document.createElementNS(this.svgNS, 'text');
-            text.setAttribute('x', qrSize / 2);
-            text.setAttribute('y', qrSize / 2);
-            text.setAttribute('text-anchor', 'middle');
-            text.setAttribute('dominant-baseline', 'middle');
-            text.setAttribute('fill', '#FFFFFF');
-            text.setAttribute('font-size', '12');
-            text.textContent = 'QR ERROR';
-            group.appendChild(text);
-
-            console.error('QR code generation failed, showing placeholder', error);
-            return group;
-        }
+      const fallbackText = document.createElementNS(this.svgNS, 'text');
+      fallbackText.setAttribute('x', x + logoSize / 2);
+      fallbackText.setAttribute('y', y + logoSize / 2 + 4);
+      fallbackText.setAttribute('text-anchor', 'middle');
+      fallbackText.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
+      fallbackText.setAttribute('font-size', logoSize / 2);
+      fallbackText.setAttribute('font-weight', 'bold');
+      fallbackText.setAttribute('fill', '#FFFFFF');
+      fallbackText.textContent = 'P';
+      group.appendChild(fallbackText);
     }
 
-    /**
-     * Add logo overlay to center of QR code
-     * @param {string} logoPath - Path to logo file
-     * @param {string} theme - Logo theme (light/dark)
-     * @returns {Promise<SVGElement>} Logo group
-     */
-    async addLogoOverlay(logoPath, theme = 'light') {
-        const group = document.createElementNS(this.svgNS, 'g');
-        group.setAttribute('id', 'logo-overlay');
+    return group;
+  }
 
-        // Calculate center position
-        const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
-        const logoSize = this.config.LOGO.SIZE_PX;
-        const padding = this.config.LOGO.BACKGROUND_PADDING;
-        const x = (totalSize - logoSize) / 2;
-        const y = (totalSize - logoSize) / 2; // center
+  /**
+   * Load SVG logo from path
+   * @param {string} logoPath - Path to logo SVG
+   * @returns {Promise<SVGElement|null>} Logo SVG element or null
+   */
+  async loadLogoSVG(logoPath) {
+    try {
+      const response = await fetch(logoPath);
+      if (!response.ok) {
+        throw new Error(`Failed to load logo: ${response.status}`);
+      }
 
-        // Add white rounded-rect background (quadratic with rounded corners)
-        const bgRect = document.createElementNS(this.svgNS, 'rect');
-        const bgSize = logoSize + padding * 2;
-        bgRect.setAttribute('x', x - padding);
-        bgRect.setAttribute('y', y - padding);
-        bgRect.setAttribute('width', bgSize);
-        bgRect.setAttribute('height', bgSize);
-        bgRect.setAttribute('rx', Math.floor(bgSize * 0.18));
-        bgRect.setAttribute('ry', Math.floor(bgSize * 0.18));
-        bgRect.setAttribute('fill', '#FFFFFF');
-        bgRect.setAttribute('filter', 'url(#logo-shadow)');
-        group.appendChild(bgRect);
+      const svgText = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svgText, 'image/svg+xml');
 
-        // Try to load and embed the logo SVG
-        try {
-            const logoSvg = await this.loadLogoSVG(logoPath);
-            if (logoSvg) {
-                // Clone and resize logo
-                const logo = logoSvg.cloneNode(true);
-                logo.setAttribute('x', x);
-                logo.setAttribute('y', y);
-                logo.setAttribute('width', logoSize);
-                logo.setAttribute('height', logoSize);
-                group.appendChild(logo);
-            } else {
-                // Fallback: use image element
-                const image = document.createElementNS(this.svgNS, 'image');
-                image.setAttribute('x', x);
-                image.setAttribute('y', y);
-                image.setAttribute('width', logoSize);
-                image.setAttribute('height', logoSize);
-                image.setAttribute('href', logoPath);
-                image.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                group.appendChild(image);
-            }
-        } catch (error) {
-            this.utils.debug('Logo loading failed, using fallback', error);
+      const logoSvg = doc.documentElement;
+      if (logoSvg && logoSvg.tagName === 'svg') {
+        return logoSvg;
+      }
 
-            // Simple fallback logo (circle with "P")
-            const fallbackCircle = document.createElementNS(this.svgNS, 'circle');
-            fallbackCircle.setAttribute('cx', x + logoSize / 2);
-            fallbackCircle.setAttribute('cy', y + logoSize / 2);
-            fallbackCircle.setAttribute('r', logoSize / 2 - 2);
-            fallbackCircle.setAttribute('fill', '#2563eb');
-            group.appendChild(fallbackCircle);
-
-            const fallbackText = document.createElementNS(this.svgNS, 'text');
-            fallbackText.setAttribute('x', x + logoSize / 2);
-            fallbackText.setAttribute('y', y + logoSize / 2 + 4);
-            fallbackText.setAttribute('text-anchor', 'middle');
-            fallbackText.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
-            fallbackText.setAttribute('font-size', logoSize / 2);
-            fallbackText.setAttribute('font-weight', 'bold');
-            fallbackText.setAttribute('fill', '#FFFFFF');
-            fallbackText.textContent = 'P';
-            group.appendChild(fallbackText);
-        }
-
-        return group;
+      return null;
+    } catch (error) {
+      this.utils.debug('Logo SVG loading failed', error);
+      return null;
     }
+  }
 
-    /**
-     * Load SVG logo from path
-     * @param {string} logoPath - Path to logo SVG
-     * @returns {Promise<SVGElement|null>} Logo SVG element or null
-     */
-    async loadLogoSVG(logoPath) {
-        try {
-            const response = await fetch(logoPath);
-            if (!response.ok) {
-                throw new Error(`Failed to load logo: ${response.status}`);
-            }
+  /**
+   * Add caption text below QR code
+   * @param {string} captionText - Caption to display
+   * @returns {SVGElement} Caption text element
+   */
+  addCaption(captionText) {
+    const text = document.createElementNS(this.svgNS, 'text');
+    text.setAttribute('id', 'caption');
 
-            const svgText = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(svgText, 'image/svg+xml');
+    const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
+    const x = totalSize / 2;
+    const y =
+      totalSize -
+      this.config.STICKER.BLEED_PX -
+      this.config.CAPTION.MARGIN_FROM_BOTTOM;
 
-            const logoSvg = doc.documentElement;
-            if (logoSvg && logoSvg.tagName === 'svg') {
-                return logoSvg;
-            }
+    text.setAttribute('x', x);
+    text.setAttribute('y', y);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'alphabetic');
+    text.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
+    text.setAttribute('font-size', this.config.CAPTION.FONT_SIZE_PX);
+    text.setAttribute('font-weight', this.config.CAPTION.FONT_WEIGHT);
+    text.setAttribute('fill', this.config.CAPTION.COLOR);
 
-            return null;
-        } catch (error) {
-            this.utils.debug('Logo SVG loading failed', error);
-            return null;
-        }
-    }
+    // Handle long captions with text wrapping if needed
+    if (captionText.length > 25) {
+      // Split long caption into multiple lines
+      const words = captionText.split(' ');
+      const lines = [];
+      let currentLine = '';
 
-    /**
-     * Add caption text below QR code
-     * @param {string} captionText - Caption to display
-     * @returns {SVGElement} Caption text element
-     */
-    addCaption(captionText) {
-        const text = document.createElementNS(this.svgNS, 'text');
-        text.setAttribute('id', 'caption');
-
-        const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
-        const x = totalSize / 2;
-        const y = totalSize - this.config.STICKER.BLEED_PX - this.config.CAPTION.MARGIN_FROM_BOTTOM;
-
-        text.setAttribute('x', x);
-        text.setAttribute('y', y);
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('dominant-baseline', 'alphabetic');
-        text.setAttribute('font-family', this.config.CAPTION.FONT_FAMILY);
-        text.setAttribute('font-size', this.config.CAPTION.FONT_SIZE_PX);
-        text.setAttribute('font-weight', this.config.CAPTION.FONT_WEIGHT);
-        text.setAttribute('fill', this.config.CAPTION.COLOR);
-
-        // Handle long captions with text wrapping if needed
-        if (captionText.length > 25) {
-            // Split long caption into multiple lines
-            const words = captionText.split(' ');
-            const lines = [];
-            let currentLine = '';
-
-            words.forEach(word => {
-                const testLine = currentLine ? `${currentLine} ${word}` : word;
-                if (testLine.length <= 25) {
-                    currentLine = testLine;
-                } else {
-                    if (currentLine) {
-                        lines.push(currentLine);
-                        currentLine = word;
-                    } else {
-                        lines.push(word);
-                    }
-                }
-            });
-
-            if (currentLine) {
-                lines.push(currentLine);
-            }
-
-            // Create tspan elements for multiple lines
-            lines.forEach((line, index) => {
-                const tspan = document.createElementNS(this.svgNS, 'tspan');
-                tspan.setAttribute('x', x);
-                tspan.setAttribute('dy', index === 0 ? '0' : '1.2em');
-                tspan.textContent = line;
-                text.appendChild(tspan);
-            });
+      words.forEach((word) => {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        if (testLine.length <= 25) {
+          currentLine = testLine;
         } else {
-            text.textContent = captionText;
+          if (currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            lines.push(word);
+          }
         }
+      });
 
-        return text;
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      // Create tspan elements for multiple lines
+      lines.forEach((line, index) => {
+        const tspan = document.createElementNS(this.svgNS, 'tspan');
+        tspan.setAttribute('x', x);
+        tspan.setAttribute('dy', index === 0 ? '0' : '1.2em');
+        tspan.textContent = line;
+        text.appendChild(tspan);
+      });
+    } else {
+      text.textContent = captionText;
     }
 
-    /**
-     * Convert SVG element to string with proper XML declaration
-     * @param {SVGElement} svgElement - SVG element to serialize
-     * @returns {string} Complete SVG string
-     */
-    svgToString(svgElement) {
-        // Add XML declaration and DOCTYPE
-        const xmlDeclaration = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>';
-        const svgString = new XMLSerializer().serializeToString(svgElement);
+    return text;
+  }
 
-        // Clean up and format the SVG string
-        const cleanSvg = svgString
-            .replace(/xmlns="[^"]*"/g, '') // Remove duplicate xmlns
-            .replace('<svg', `<svg xmlns="${this.svgNS}" xmlns:xlink="${this.xlinkNS}"`);
+  /**
+   * Convert SVG element to string with proper XML declaration
+   * @param {SVGElement} svgElement - SVG element to serialize
+   * @returns {string} Complete SVG string
+   */
+  svgToString(svgElement) {
+    // Add XML declaration and DOCTYPE
+    const xmlDeclaration =
+      '<?xml version="1.0" encoding="UTF-8" standalone="no"?>';
+    const svgString = new XMLSerializer().serializeToString(svgElement);
 
-        return `${xmlDeclaration}\n${cleanSvg}`;
-    }
+    // Clean up and format the SVG string
+    const cleanSvg = svgString
+      .replace(/xmlns="[^"]*"/g, '') // Remove duplicate xmlns
+      .replace(
+        '<svg',
+        `<svg xmlns="${this.svgNS}" xmlns:xlink="${this.xlinkNS}"`
+      );
 
-    /**
-     * Optimize SVG by removing unnecessary attributes and cleaning up
-     * @param {SVGElement} svgElement - SVG to optimize
-     * @returns {SVGElement} Optimized SVG
-     */
-    optimizeSVG(svgElement) {
-        const optimized = svgElement.cloneNode(true);
+    return `${xmlDeclaration}\n${cleanSvg}`;
+  }
 
-        // Remove unnecessary attributes
-        const elementsToClean = optimized.querySelectorAll('*');
-        elementsToClean.forEach(element => {
-            // Remove empty attributes
-            Array.from(element.attributes).forEach(attr => {
-                if (!attr.value || attr.value.trim() === '') {
-                    element.removeAttribute(attr.name);
-                }
-            });
+  /**
+   * Optimize SVG by removing unnecessary attributes and cleaning up
+   * @param {SVGElement} svgElement - SVG to optimize
+   * @returns {SVGElement} Optimized SVG
+   */
+  optimizeSVG(svgElement) {
+    const optimized = svgElement.cloneNode(true);
 
-            // Round numeric values to reduce file size
-            ['x', 'y', 'width', 'height', 'cx', 'cy', 'r'].forEach(attr => {
-                const value = element.getAttribute(attr);
-                if (value && !isNaN(parseFloat(value))) {
-                    const rounded = Math.round(parseFloat(value) * 100) / 100;
-                    element.setAttribute(attr, rounded.toString());
-                }
-            });
-        });
-
-        return optimized;
-    }
-
-    /**
-     * Create a preview-sized version of the sticker
-     * @param {SVGElement} stickerSvg - Full sticker SVG
-     * @param {number} previewSize - Preview size in pixels
-     * @returns {SVGElement} Preview SVG
-     */
-    createPreviewSVG(stickerSvg, previewSize = 280) {
-        const preview = stickerSvg.cloneNode(true);
-
-        // Update dimensions for preview
-        preview.setAttribute('width', previewSize);
-        preview.setAttribute('height', previewSize);
-
-        // Remove trim marks from preview
-        const trimMarks = preview.querySelector('#trim-marks');
-        if (trimMarks) {
-            trimMarks.remove();
+    // Remove unnecessary attributes
+    const elementsToClean = optimized.querySelectorAll('*');
+    elementsToClean.forEach((element) => {
+      // Remove empty attributes
+      Array.from(element.attributes).forEach((attr) => {
+        if (!attr.value || attr.value.trim() === '') {
+          element.removeAttribute(attr.name);
         }
+      });
 
-        // Add preview-specific styling
-        preview.setAttribute('style', 'border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);');
+      // Round numeric values to reduce file size
+      ['x', 'y', 'width', 'height', 'cx', 'cy', 'r'].forEach((attr) => {
+        const value = element.getAttribute(attr);
+        if (value && !isNaN(parseFloat(value))) {
+          const rounded = Math.round(parseFloat(value) * 100) / 100;
+          element.setAttribute(attr, rounded.toString());
+        }
+      });
+    });
 
-        return preview;
+    return optimized;
+  }
+
+  /**
+   * Create a preview-sized version of the sticker
+   * @param {SVGElement} stickerSvg - Full sticker SVG
+   * @param {number} previewSize - Preview size in pixels
+   * @returns {SVGElement} Preview SVG
+   */
+  createPreviewSVG(stickerSvg, previewSize = 280) {
+    const preview = stickerSvg.cloneNode(true);
+
+    // Update dimensions for preview
+    preview.setAttribute('width', previewSize);
+    preview.setAttribute('height', previewSize);
+
+    // Remove trim marks from preview
+    const trimMarks = preview.querySelector('#trim-marks');
+    if (trimMarks) {
+      trimMarks.remove();
     }
+
+    // Add preview-specific styling
+    preview.setAttribute(
+      'style',
+      'border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);'
+    );
+
+    return preview;
+  }
 }
 
 // Export singleton instance
 export const svgBuilder = new SVGBuilder();
 
 if (CONFIG.DEBUG) {
-    console.log('SVG Builder module loaded');
+  console.log('SVG Builder module loaded');
 }

@@ -1,12 +1,7 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npx playwright:*)",
-      "mcp__playwright__:*"
-    ]
+    "allow": ["Bash(npx playwright:*)", "mcp__playwright__:*"]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "playwright"
-  ]
+  "enabledMcpjsonServers": ["playwright"]
 }

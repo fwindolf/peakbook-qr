@@ -2,157 +2,159 @@ import { CONFIG, ConfigUtils } from '../config/constants.js';
 import { validator } from './validator.js';
 
 export class FileHandler {
-    constructor() {
-        this.config = CONFIG;
-        this.utils = ConfigUtils;
-        this.validator = validator;
+  constructor() {
+    this.config = CONFIG;
+    this.utils = ConfigUtils;
+    this.validator = validator;
+  }
+
+  /**
+   * Download SVG file to user's device
+   * @param {string} svgContent - SVG content as string
+   * @param {string} filename - Desired filename
+   * @param {Object} options - Download options
+   * @returns {Promise<boolean>} Success status
+   */
+  async downloadSVG(svgContent, filename, options = {}) {
+    try {
+      this.utils.debug('Starting SVG download', {
+        filename,
+        size: svgContent.length,
+      });
+
+      // Validate filename
+      const filenameValidation = this.validator.validateFilename(filename);
+      const finalFilename = filenameValidation.sanitized;
+
+      // Validate SVG content
+      const svgValidation = this.validator.validateSVGContent(svgContent);
+      if (!svgValidation.valid) {
+        throw new Error(`Invalid SVG: ${svgValidation.issues.join(', ')}`);
+      }
+
+      // Create blob with proper MIME type
+      const blob = new Blob([svgContent], {
+        type: 'image/svg+xml;charset=utf-8',
+      });
+
+      // Create download using modern APIs
+      if (window.showSaveFilePicker && options.useFilePicker !== false) {
+        // Use File System Access API if available (modern browsers)
+        await this.downloadWithFilePicker(blob, finalFilename);
+      } else {
+        // Fallback to traditional download
+        this.downloadWithAnchor(blob, finalFilename);
+      }
+
+      this.utils.debug('SVG download completed', { filename: finalFilename });
+      return true;
+    } catch (error) {
+      this.utils.debug('SVG download failed', error);
+      throw new Error(`Download failed: ${error.message}`);
     }
+  }
 
-    /**
-     * Download SVG file to user's device
-     * @param {string} svgContent - SVG content as string
-     * @param {string} filename - Desired filename
-     * @param {Object} options - Download options
-     * @returns {Promise<boolean>} Success status
-     */
-    async downloadSVG(svgContent, filename, options = {}) {
-        try {
-            this.utils.debug('Starting SVG download', { filename, size: svgContent.length });
+  /**
+   * Download using File System Access API (modern browsers)
+   * @param {Blob} blob - File blob
+   * @param {string} filename - Filename
+   */
+  async downloadWithFilePicker(blob, filename) {
+    try {
+      const fileHandle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'SVG files',
+            accept: {
+              'image/svg+xml': ['.svg'],
+            },
+          },
+        ],
+      });
 
-            // Validate filename
-            const filenameValidation = this.validator.validateFilename(filename);
-            const finalFilename = filenameValidation.sanitized;
-
-            // Validate SVG content
-            const svgValidation = this.validator.validateSVGContent(svgContent);
-            if (!svgValidation.valid) {
-                throw new Error(`Invalid SVG: ${svgValidation.issues.join(', ')}`);
-            }
-
-            // Create blob with proper MIME type
-            const blob = new Blob([svgContent], {
-                type: 'image/svg+xml;charset=utf-8'
-            });
-
-            // Create download using modern APIs
-            if (window.showSaveFilePicker && options.useFilePicker !== false) {
-                // Use File System Access API if available (modern browsers)
-                await this.downloadWithFilePicker(blob, finalFilename);
-            } else {
-                // Fallback to traditional download
-                this.downloadWithAnchor(blob, finalFilename);
-            }
-
-            this.utils.debug('SVG download completed', { filename: finalFilename });
-            return true;
-
-        } catch (error) {
-            this.utils.debug('SVG download failed', error);
-            throw new Error(`Download failed: ${error.message}`);
-        }
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+    } catch (error) {
+      // If user cancels or API fails, fall back to anchor method
+      if (error.name !== 'AbortError') {
+        this.utils.debug('File picker failed, using fallback', error);
+      }
+      this.downloadWithAnchor(blob, filename);
     }
+  }
 
-    /**
-     * Download using File System Access API (modern browsers)
-     * @param {Blob} blob - File blob
-     * @param {string} filename - Filename
-     */
-    async downloadWithFilePicker(blob, filename) {
-        try {
-            const fileHandle = await window.showSaveFilePicker({
-                suggestedName: filename,
-                types: [{
-                    description: 'SVG files',
-                    accept: {
-                        'image/svg+xml': ['.svg']
-                    }
-                }]
-            });
+  /**
+   * Download using anchor element (traditional method)
+   * @param {Blob} blob - File blob
+   * @param {string} filename - Filename
+   */
+  downloadWithAnchor(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
 
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
 
-        } catch (error) {
-            // If user cancels or API fails, fall back to anchor method
-            if (error.name !== 'AbortError') {
-                this.utils.debug('File picker failed, using fallback', error);
-            }
-            this.downloadWithAnchor(blob, filename);
-        }
+    // Append to DOM, click, and remove
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
+    // Clean up object URL
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  }
+
+  /**
+   * Create and open print window with sticker
+   * @param {string} svgContent - SVG content
+   * @param {string} token - Token value for print title
+   * @param {Object} options - Print options
+   * @returns {Promise<Window>} Print window reference
+   */
+  async printSticker(svgContent, token, options = {}) {
+    try {
+      this.utils.debug('Creating print preview', { token });
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+
+      if (!printWindow) {
+        throw new Error('Unable to open print window. Please allow popups.');
+      }
+
+      const printHTML = this.generatePrintHTML(svgContent, token, options);
+      printWindow.document.write(printHTML);
+      printWindow.document.close();
+
+      // Wait for content to load, then trigger print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+        }, 500);
+      };
+
+      return printWindow;
+    } catch (error) {
+      this.utils.debug('Print preview failed', error);
+      throw new Error(`Print preview failed: ${error.message}`);
     }
+  }
 
-    /**
-     * Download using anchor element (traditional method)
-     * @param {Blob} blob - File blob
-     * @param {string} filename - Filename
-     */
-    downloadWithAnchor(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
+  /**
+   * Generate HTML for print preview
+   * @param {string} svgContent - SVG content
+   * @param {string} token - Token value
+   * @param {Object} options - Print options
+   * @returns {string} Complete HTML document
+   */
+  generatePrintHTML(svgContent, token, options = {}) {
+    const title = options.title || `Peakbook QR Sticker - ${token}`;
+    const showInstructions = options.showInstructions !== false;
 
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.style.display = 'none';
-
-        // Append to DOM, click, and remove
-        document.body.appendChild(anchor);
-        anchor.click();
-        document.body.removeChild(anchor);
-
-        // Clean up object URL
-        setTimeout(() => URL.revokeObjectURL(url), 100);
-    }
-
-    /**
-     * Create and open print window with sticker
-     * @param {string} svgContent - SVG content
-     * @param {string} token - Token value for print title
-     * @param {Object} options - Print options
-     * @returns {Promise<Window>} Print window reference
-     */
-    async printSticker(svgContent, token, options = {}) {
-        try {
-            this.utils.debug('Creating print preview', { token });
-
-            const printWindow = window.open('', '_blank', 'width=800,height=600');
-
-            if (!printWindow) {
-                throw new Error('Unable to open print window. Please allow popups.');
-            }
-
-            const printHTML = this.generatePrintHTML(svgContent, token, options);
-            printWindow.document.write(printHTML);
-            printWindow.document.close();
-
-            // Wait for content to load, then trigger print
-            printWindow.onload = () => {
-                setTimeout(() => {
-                    printWindow.focus();
-                    printWindow.print();
-                }, 500);
-            };
-
-            return printWindow;
-
-        } catch (error) {
-            this.utils.debug('Print preview failed', error);
-            throw new Error(`Print preview failed: ${error.message}`);
-        }
-    }
-
-    /**
-     * Generate HTML for print preview
-     * @param {string} svgContent - SVG content
-     * @param {string} token - Token value
-     * @param {Object} options - Print options
-     * @returns {string} Complete HTML document
-     */
-    generatePrintHTML(svgContent, token, options = {}) {
-        const title = options.title || `Peakbook QR Sticker - ${token}`;
-        const showInstructions = options.showInstructions !== false;
-
-        return `
+    return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -291,7 +293,9 @@ export class FileHandler {
             ${svgContent}
         </div>
 
-        ${showInstructions ? `
+        ${
+          showInstructions
+            ? `
         <div class="print-info">
             <h2>Sticker Information</h2>
 
@@ -327,7 +331,9 @@ export class FileHandler {
                 <li>Keep spare stickers for replacements</li>
             </ul>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
     </div>
 
     <button class="print-button no-print" onclick="window.print()">
@@ -360,185 +366,187 @@ export class FileHandler {
 </body>
 </html>
         `.trim();
+  }
+
+  /**
+   * Copy SVG content to clipboard
+   * @param {string} svgContent - SVG content to copy
+   * @returns {Promise<boolean>} Success status
+   */
+  async copyToClipboard(svgContent) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(svgContent);
+        this.utils.debug('SVG copied to clipboard');
+        return true;
+      } else {
+        // Fallback for older browsers
+        return this.copyToClipboardFallback(svgContent);
+      }
+    } catch (error) {
+      this.utils.debug('Clipboard copy failed', error);
+      throw new Error(`Failed to copy to clipboard: ${error.message}`);
     }
+  }
 
-    /**
-     * Copy SVG content to clipboard
-     * @param {string} svgContent - SVG content to copy
-     * @returns {Promise<boolean>} Success status
-     */
-    async copyToClipboard(svgContent) {
-        try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(svgContent);
-                this.utils.debug('SVG copied to clipboard');
-                return true;
-            } else {
-                // Fallback for older browsers
-                return this.copyToClipboardFallback(svgContent);
-            }
-        } catch (error) {
-            this.utils.debug('Clipboard copy failed', error);
-            throw new Error(`Failed to copy to clipboard: ${error.message}`);
-        }
+  /**
+   * Fallback clipboard copy for older browsers
+   * @param {string} content - Content to copy
+   * @returns {boolean} Success status
+   */
+  copyToClipboardFallback(content) {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      const result = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      return result;
+    } catch (error) {
+      return false;
     }
+  }
 
-    /**
-     * Fallback clipboard copy for older browsers
-     * @param {string} content - Content to copy
-     * @returns {boolean} Success status
-     */
-    copyToClipboardFallback(content) {
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = content;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
+  /**
+   * Create data URL from SVG content
+   * @param {string} svgContent - SVG content
+   * @returns {string} Data URL
+   */
+  createDataURL(svgContent) {
+    const encoded = encodeURIComponent(svgContent);
+    return `data:image/svg+xml;charset=utf-8,${encoded}`;
+  }
 
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
+  /**
+   * Export sticker as PNG (requires canvas conversion)
+   * @param {string} svgContent - SVG content
+   * @param {Object} options - Export options
+   * @returns {Promise<string>} PNG data URL
+   */
+  async exportAsPNG(svgContent, options = {}) {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
 
-            const result = document.execCommand('copy');
-            document.body.removeChild(textArea);
+        const size = options.size || this.config.EXPORT.PRINT_DPI;
+        canvas.width = size;
+        canvas.height = size;
 
-            return result;
-        } catch (error) {
-            return false;
-        }
-    }
+        img.onload = () => {
+          try {
+            // Fill white background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    /**
-     * Create data URL from SVG content
-     * @param {string} svgContent - SVG content
-     * @returns {string} Data URL
-     */
-    createDataURL(svgContent) {
-        const encoded = encodeURIComponent(svgContent);
-        return `data:image/svg+xml;charset=utf-8,${encoded}`;
-    }
+            // Draw SVG
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-    /**
-     * Export sticker as PNG (requires canvas conversion)
-     * @param {string} svgContent - SVG content
-     * @param {Object} options - Export options
-     * @returns {Promise<string>} PNG data URL
-     */
-    async exportAsPNG(svgContent, options = {}) {
-        return new Promise((resolve, reject) => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
-
-                const size = options.size || this.config.EXPORT.PRINT_DPI;
-                canvas.width = size;
-                canvas.height = size;
-
-                img.onload = () => {
-                    try {
-                        // Fill white background
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                        // Draw SVG
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                        // Convert to PNG
-                        const pngDataURL = canvas.toDataURL('image/png', 1.0);
-                        resolve(pngDataURL);
-                    } catch (error) {
-                        reject(new Error(`PNG conversion failed: ${error.message}`));
-                    }
-                };
-
-                img.onerror = () => {
-                    reject(new Error('Failed to load SVG for PNG conversion'));
-                };
-
-                img.src = this.createDataURL(svgContent);
-
-            } catch (error) {
-                reject(new Error(`PNG export failed: ${error.message}`));
-            }
-        });
-    }
-
-    /**
-     * Validate file size and warn if too large
-     * @param {string} content - File content
-     * @param {string} type - File type
-     * @returns {Object} Size validation result
-     */
-    validateFileSize(content, type = 'svg') {
-        const sizeBytes = new Blob([content]).size;
-        const sizeMB = sizeBytes / (1024 * 1024);
-
-        const limits = {
-            svg: 5, // 5MB limit for SVG
-            png: 50 // 50MB limit for PNG
+            // Convert to PNG
+            const pngDataURL = canvas.toDataURL('image/png', 1.0);
+            resolve(pngDataURL);
+          } catch (error) {
+            reject(new Error(`PNG conversion failed: ${error.message}`));
+          }
         };
 
-        const limit = limits[type] || limits.svg;
-
-        return {
-            sizeBytes,
-            sizeMB: Math.round(sizeMB * 100) / 100,
-            withinLimit: sizeMB <= limit,
-            warning: sizeMB > limit ? `File size (${sizeMB.toFixed(1)}MB) exceeds recommended limit of ${limit}MB` : null
-        };
-    }
-
-    /**
-     * Get file extension from MIME type
-     * @param {string} mimeType - MIME type
-     * @returns {string} File extension
-     */
-    getExtensionFromMimeType(mimeType) {
-        const mimeMap = {
-            'image/svg+xml': 'svg',
-            'image/png': 'png',
-            'image/jpeg': 'jpg',
-            'application/pdf': 'pdf'
+        img.onerror = () => {
+          reject(new Error('Failed to load SVG for PNG conversion'));
         };
 
-        return mimeMap[mimeType] || 'svg';
-    }
+        img.src = this.createDataURL(svgContent);
+      } catch (error) {
+        reject(new Error(`PNG export failed: ${error.message}`));
+      }
+    });
+  }
 
-    /**
-     * Check if browser supports File System Access API
-     * @returns {boolean} Support status
-     */
-    supportsFilePicker() {
-        return 'showSaveFilePicker' in window;
-    }
+  /**
+   * Validate file size and warn if too large
+   * @param {string} content - File content
+   * @param {string} type - File type
+   * @returns {Object} Size validation result
+   */
+  validateFileSize(content, type = 'svg') {
+    const sizeBytes = new Blob([content]).size;
+    const sizeMB = sizeBytes / (1024 * 1024);
 
-    /**
-     * Check if browser supports modern clipboard API
-     * @returns {boolean} Support status
-     */
-    supportsClipboard() {
-        return navigator.clipboard && navigator.clipboard.writeText;
-    }
+    const limits = {
+      svg: 5, // 5MB limit for SVG
+      png: 50, // 50MB limit for PNG
+    };
 
-    /**
-     * Get download capabilities of current browser
-     * @returns {Object} Capability information
-     */
-    getDownloadCapabilities() {
-        return {
-            filePicker: this.supportsFilePicker(),
-            clipboard: this.supportsClipboard(),
-            popup: !!(window.open),
-            download: !!(document.createElement('a').download !== undefined)
-        };
-    }
+    const limit = limits[type] || limits.svg;
+
+    return {
+      sizeBytes,
+      sizeMB: Math.round(sizeMB * 100) / 100,
+      withinLimit: sizeMB <= limit,
+      warning:
+        sizeMB > limit
+          ? `File size (${sizeMB.toFixed(1)}MB) exceeds recommended limit of ${limit}MB`
+          : null,
+    };
+  }
+
+  /**
+   * Get file extension from MIME type
+   * @param {string} mimeType - MIME type
+   * @returns {string} File extension
+   */
+  getExtensionFromMimeType(mimeType) {
+    const mimeMap = {
+      'image/svg+xml': 'svg',
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'application/pdf': 'pdf',
+    };
+
+    return mimeMap[mimeType] || 'svg';
+  }
+
+  /**
+   * Check if browser supports File System Access API
+   * @returns {boolean} Support status
+   */
+  supportsFilePicker() {
+    return 'showSaveFilePicker' in window;
+  }
+
+  /**
+   * Check if browser supports modern clipboard API
+   * @returns {boolean} Support status
+   */
+  supportsClipboard() {
+    return navigator.clipboard && navigator.clipboard.writeText;
+  }
+
+  /**
+   * Get download capabilities of current browser
+   * @returns {Object} Capability information
+   */
+  getDownloadCapabilities() {
+    return {
+      filePicker: this.supportsFilePicker(),
+      clipboard: this.supportsClipboard(),
+      popup: !!window.open,
+      download: !!(document.createElement('a').download !== undefined),
+    };
+  }
 }
 
 // Export singleton instance
 export const fileHandler = new FileHandler();
 
 if (CONFIG.DEBUG) {
-    console.log('File Handler module loaded');
+  console.log('File Handler module loaded');
 }
