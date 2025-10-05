@@ -28,6 +28,14 @@ export const CONFIG = {
         COLOR_LIGHT: '#FFFFFF',        // White background
     },
 
+    // Color configuration (single mode)
+    COLORS: {
+        BACKGROUND: '#99bdc6', // sticker background behind QR (and QR background when no image)
+        DOTS: '#2c3239',       // QR dots/modules
+        CORNERS: '#2c3239',    // Finder/alignment corners
+        BORDER: '#2c3239'      // Outer frame
+    },
+
     // QR Styling (qr-code-styling)
     QR_STYLING: {
         WIDTH: 300,
@@ -42,7 +50,7 @@ export const CONFIG = {
             COLOR: '#2c3239'
         },
         BACKGROUND: {
-            COLOR: '#ffffff'
+            COLOR: '#99bdc6'
         },
         IMAGE: {
             HIDE_BACKGROUND_DOTS: true,
@@ -61,7 +69,9 @@ export const CONFIG = {
     FRAME: {
         PADDING_PX: 8,
         RADIUS_PX: 12,
-        COLOR: '#2c3239'
+        COLOR: '#2c3239',
+        OUTER_STROKE_PX: 10,
+        OUTER_INNER_STROKE_PX: 4
     },
 
     BRAND: {
@@ -123,10 +133,9 @@ export const CONFIG = {
         FILE_DOWNLOADED: 'SVG file downloaded successfully!',
     },
 
-    // Logo Paths (relative to public directory)
-    LOGOS: {
-        light: '/icons/appicon.light.svg',
-        dark: '/icons/appicon.dark.svg'
+    // Assets (single mode)
+    ASSETS: {
+        CENTER_ICON: '/icons/appicon.light.svg'
     },
 
     // Development flags

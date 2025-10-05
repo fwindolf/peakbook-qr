@@ -135,15 +135,7 @@ export class Validator {
      * @returns {Object} - { valid: boolean, error: string|null }
      */
     validateTheme(theme) {
-        const validThemes = Object.keys(this.config.LOGOS);
-
-        if (!validThemes.includes(theme)) {
-            return {
-                valid: false,
-                error: `Theme must be one of: ${validThemes.join(', ')}`
-            };
-        }
-
+        // Single mode: always valid
         return { valid: true };
     }
 
@@ -184,12 +176,7 @@ export class Validator {
             valid = false;
         }
 
-        // Validate theme
-        const themeValidation = this.validateTheme(formData.theme);
-        if (!themeValidation.valid) {
-            errors.theme = themeValidation.error;
-            valid = false;
-        }
+        // Theme validation no longer required (single mode)
 
         // Validate generated URL if basic validation passed
         if (valid) {

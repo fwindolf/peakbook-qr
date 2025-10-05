@@ -11,7 +11,8 @@
     "lint": "eslint src/ --ext js --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "qr-code-styling": "^1.9.2"
+    "qr-code-styling": "^1.9.2",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@vitejs/plugin-legacy": "^5.2.0",

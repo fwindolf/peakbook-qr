@@ -51,9 +51,12 @@ class PeakbookQRApp {
         this.form = document.getElementById('stickerForm');
         this.tokenInput = document.getElementById('tokenInput');
         this.captionInput = document.getElementById('captionInput');
+        this.bgColorInput = document.getElementById('bgColor');
+        this.dotsColorInput = document.getElementById('dotsColor');
+        this.cornersColorInput = document.getElementById('cornersColor');
         this.paramNameInput = document.getElementById('paramName');
         this.eccLevelSelect = document.getElementById('eccLevel');
-        this.logoThemeSelect = document.getElementById('logoTheme');
+        this.logoThemeSelect = null;
 
         // Display elements
         this.previewContainer = document.getElementById('previewContainer');
@@ -131,7 +134,7 @@ class PeakbookQRApp {
         });
 
         // Preference saving
-        [this.captionInput, this.paramNameInput, this.eccLevelSelect, this.logoThemeSelect].forEach(element => {
+        [this.captionInput, this.paramNameInput, this.eccLevelSelect, this.bgColorInput, this.dotsColorInput, this.cornersColorInput].forEach(element => {
             if (element) {
                 element.addEventListener('change', () => this.savePreferences());
             }
@@ -263,7 +266,7 @@ class PeakbookQRApp {
             const qrResult = await this.qrGenerator.generateFromToken(formData.token, {
                 eccLevel: formData.eccLevel,
                 paramName: formData.paramName,
-                logoTheme: formData.theme
+                colors: formData.colors
             });
             this.utils.debug('QR generation completed', {
                 hasResult: !!qrResult,
@@ -273,8 +276,8 @@ class PeakbookQRApp {
             });
 
             this.utils.debug('Starting SVG sticker creation...');
-            // Build sticker SVG
-            const logoPath = this.utils.getLogoPath(formData.theme);
+            // Build sticker SVG. Logo path no longer needed (center icon handled internally)
+            const logoPath = null;
             this.utils.debug('Using logo path', logoPath);
 
             const stickerSvg = await this.svgBuilder.createStickerSVG(
@@ -282,7 +285,7 @@ class PeakbookQRApp {
                 logoPath,
                 formData.caption,
                 {
-                    logoTheme: formData.theme,
+                    colors: formData.colors,
                     includeTrimMarks: this.config.INCLUDE_TRIM_MARKS
                 }
             );
@@ -327,7 +330,12 @@ class PeakbookQRApp {
             caption: this.captionInput.value || '',
             paramName: this.paramNameInput?.value || this.config.DEFAULT_PARAM_NAME,
             eccLevel: this.eccLevelSelect?.value || this.config.QR.ERROR_CORRECTION,
-            theme: this.logoThemeSelect?.value || 'light'
+            colors: {
+                BACKGROUND: this.bgColorInput?.value || this.config.COLORS.BACKGROUND,
+                DOTS: this.dotsColorInput?.value || this.config.COLORS.DOTS,
+                CORNERS: this.cornersColorInput?.value || this.config.COLORS.CORNERS,
+                BORDER: this.config.COLORS.BORDER
+            }
         };
     }
 
@@ -516,7 +524,12 @@ class PeakbookQRApp {
                 caption: this.captionInput?.value || '',
                 paramName: this.paramNameInput?.value || this.config.DEFAULT_PARAM_NAME,
                 eccLevel: this.eccLevelSelect?.value || this.config.QR.ERROR_CORRECTION,
-                logoTheme: this.logoThemeSelect?.value || 'light'
+                colors: {
+                    BACKGROUND: this.bgColorInput?.value || this.config.COLORS.BACKGROUND,
+                    DOTS: this.dotsColorInput?.value || this.config.COLORS.DOTS,
+                    CORNERS: this.cornersColorInput?.value || this.config.COLORS.CORNERS,
+                    BORDER: this.config.COLORS.BORDER
+                }
             };
 
             localStorage.setItem('peakbook-qr-preferences', JSON.stringify(preferences));
@@ -544,8 +557,10 @@ class PeakbookQRApp {
                 if (preferences.eccLevel && this.eccLevelSelect) {
                     this.eccLevelSelect.value = preferences.eccLevel;
                 }
-                if (preferences.logoTheme && this.logoThemeSelect) {
-                    this.logoThemeSelect.value = preferences.logoTheme;
+                if (preferences.colors) {
+                    this.bgColorInput && (this.bgColorInput.value = preferences.colors.BACKGROUND || this.config.COLORS.BACKGROUND);
+                    this.dotsColorInput && (this.dotsColorInput.value = preferences.colors.DOTS || this.config.COLORS.DOTS);
+                    this.cornersColorInput && (this.cornersColorInput.value = preferences.colors.CORNERS || this.config.COLORS.CORNERS);
                 }
 
                 this.utils.debug('Preferences loaded', preferences);

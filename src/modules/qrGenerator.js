@@ -17,7 +17,8 @@ export class QRGenerator {
     async generateSVG(data, options = {}) {
         // Build qr-code-styling options
         const styling = this.config.QR_STYLING;
-        const imageUrl = options.logoPath || this.config.LOGOS.light;
+        const colors = { ...this.config.COLORS, ...(options.colors || {}) };
+        // Background image removed; we use flat color for QR background
 
         const qrStylingOptions = {
             width: styling.WIDTH,
@@ -37,18 +38,18 @@ export class QRGenerator {
                 saveAsBlob: styling.IMAGE.SAVE_AS_BLOB
             },
             dotsOptions: {
-                color: styling.DOTS.COLOR,
+                color: colors.DOTS,
                 type: styling.DOTS.TYPE
             },
             backgroundOptions: {
-                color: this.config.QR_STYLING.BACKGROUND.COLOR
+                color: colors.BACKGROUND
             },
             // Set corners' colors only (no special shapes)
             cornersSquareOptions: {
-                color: styling.CORNERS.COLOR
+                color: colors.CORNERS
             },
             cornersDotOptions: {
-                color: styling.CORNERS.COLOR
+                color: colors.CORNERS
             }
         };
 
@@ -62,22 +63,6 @@ export class QRGenerator {
             }
 
             const qr = new QRCodeStyling(qrStylingOptions);
-
-            // Add background app icon image covering the entire QR area
-            qr.applyExtension((svg, opts) => {
-                try {
-                    const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-                    img.setAttribute('x', '0');
-                    img.setAttribute('y', '0');
-                    img.setAttribute('width', String(opts.width || styling.WIDTH));
-                    img.setAttribute('height', String(opts.height || styling.HEIGHT));
-                    img.setAttribute('href', imageUrl);
-                    img.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-                    svg.insertBefore(img, svg.firstChild);
-                } catch (_) {
-                    // ignore
-                }
-            });
             const blob = await qr.getRawData('svg');
             const svgText = await blob.text();
 
@@ -332,8 +317,8 @@ export class QRGenerator {
 
         this.utils.debug('Generating QR from token', { token, url, options });
 
-        // Generate QR code
-        const result = await this.generateSVG(url, { ...options, logoPath: this.utils.getLogoPath(options.logoTheme || 'light') });
+        // Generate QR code (colors may override defaults)
+        const result = await this.generateSVG(url, { colors: options.colors });
 
         return {
             ...result,

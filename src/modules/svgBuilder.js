@@ -48,8 +48,8 @@ export class SVGBuilder {
                 contentGroup.setAttribute('clip-path', 'url(#sticker-clip)');
             }
 
-            // Add framed layout (border + caption above + brand below + QR centered)
-            const framed = await this.addFramedLayout(qrResult, caption || '', options.logoTheme);
+            // Add framed layout (outer double border + CTA caption + QR + brand)
+            const framed = await this.addFramedLayout(qrResult, caption || '');
             contentGroup.appendChild(framed);
 
             svg.appendChild(contentGroup);
@@ -69,7 +69,7 @@ export class SVGBuilder {
      * @param {string} caption
      * @returns {Promise<SVGElement>}
      */
-    async addFramedLayout(qrResult, caption, theme = 'light') {
+    async addFramedLayout(qrResult, caption) {
         const group = document.createElementNS(this.svgNS, 'g');
         group.setAttribute('id', 'framed-layout');
 
@@ -85,7 +85,7 @@ export class SVGBuilder {
         const approxModules = this.config.QR_STYLING.APPROX_MODULES || 33;
         const moduleSize = Math.max(1, Math.round(qrTargetSize / approxModules));
 
-        // Border rectangle (stroke equals module size)
+        // Inner panel background and border (white then dark) consistent with outer
         const border = document.createElementNS(this.svgNS, 'rect');
         border.setAttribute('x', innerX);
         border.setAttribute('y', innerY);
@@ -93,10 +93,10 @@ export class SVGBuilder {
         border.setAttribute('height', innerH);
         border.setAttribute('rx', this.config.FRAME.RADIUS_PX);
         border.setAttribute('ry', this.config.FRAME.RADIUS_PX);
-        border.setAttribute('fill', '#ffffff');
-        border.setAttribute('stroke', this.config.FRAME.COLOR);
-        border.setAttribute('stroke-width', moduleSize);
+        border.setAttribute('fill', this.config.COLORS.BACKGROUND || '#ffffff');
         group.appendChild(border);
+
+        // No extra inner strokes to avoid multiple rings; keep clean panel
 
         // Text areas
         const captionHeight = caption ? this.config.CAPTION.FONT_SIZE_PX * 1.4 : 0;
@@ -125,7 +125,7 @@ export class SVGBuilder {
         // Add QR, centered between caption and brand
         const qrGroup = await this.addQRCode(qrResult);
         const qrX = innerX + (innerW - qrSize) / 2;
-        const qrY = innerY + (caption ? captionHeight + spacing : moduleSize / 2) + (availableH - qrSize) / 2 + moduleSize / 2;
+        const qrY = innerY + (caption ? captionHeight + spacing : moduleSize) + (availableH - qrSize) / 2;
         qrGroup.setAttribute('transform', `translate(${qrX}, ${qrY})`);
 
         // Resize embedded qr to qrSize
@@ -133,15 +133,92 @@ export class SVGBuilder {
         if (qrEmbedded) {
             qrEmbedded.setAttribute('width', qrSize);
             qrEmbedded.setAttribute('height', qrSize);
+            // Ensure QR primitives use configured colors after embedding
+            qrEmbedded.querySelectorAll('path, rect, circle').forEach(el => {
+                if (!el.getAttribute('fill') || el.getAttribute('fill') === '#000' || el.getAttribute('fill') === '#000000') {
+                    el.setAttribute('fill', this.config.COLORS.DOTS);
+                }
+            });
+            qrEmbedded.querySelectorAll('[stroke]').forEach(el => {
+                el.setAttribute('stroke', this.config.COLORS.CORNERS);
+            });
         }
         group.appendChild(qrGroup);
 
-        // Center logo overlay with margin; use opposite theme of selected
-        const oppositeTheme = theme === 'dark' ? 'light' : 'dark';
-        // Use brand logo in the center, not app icon
-        const logoPath = this.config.LOGOS[oppositeTheme] || this.config.LOGOS.light;
-        const logoGroup = await this.addLogoOverlay(logoPath, oppositeTheme);
+        // Center logo overlay with margin; single-mode assets
+        const logoPath = this.config.ASSETS.CENTER_ICON;
+        const logoGroup = await this.addLogoOverlay(logoPath);
         group.appendChild(logoGroup);
+
+        // Add double border around logo by drawing two rounded rect strokes and masking out dots beneath
+        const logoBorderGroup = document.createElementNS(this.svgNS, 'g');
+        const insetX = qrX + (qrSize - this.config.LOGO.SIZE_PX) / 2 - this.config.LOGO.BACKGROUND_PADDING;
+        const insetY = qrY + (qrSize - this.config.LOGO.SIZE_PX) / 2 - this.config.LOGO.BACKGROUND_PADDING;
+        const bgSize = this.config.LOGO.SIZE_PX + this.config.LOGO.BACKGROUND_PADDING * 2;
+
+        // Mask to drop dots behind the logo area
+        const maskId = 'logo-cutout-mask';
+        const mask = document.createElementNS(this.svgNS, 'mask');
+        mask.setAttribute('id', maskId);
+        mask.setAttribute('maskUnits', 'userSpaceOnUse');
+        const maskRect = document.createElementNS(this.svgNS, 'rect');
+        maskRect.setAttribute('x', '0');
+        maskRect.setAttribute('y', '0');
+        maskRect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
+        maskRect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
+        maskRect.setAttribute('fill', 'white');
+        const hole = document.createElementNS(this.svgNS, 'rect');
+        // Slightly inflate hole to be sure all dots are removed under the logo background
+        const inflate = 1.5;
+        hole.setAttribute('x', insetX - inflate);
+        hole.setAttribute('y', insetY - inflate);
+        hole.setAttribute('width', bgSize + inflate * 2);
+        hole.setAttribute('height', bgSize + inflate * 2);
+        hole.setAttribute('rx', Math.floor(bgSize * 0.18));
+        hole.setAttribute('ry', Math.floor(bgSize * 0.18));
+        hole.setAttribute('fill', 'black');
+        mask.appendChild(maskRect);
+        mask.appendChild(hole);
+        // Ensure mask is defined in <defs>
+        const svgRoot = group.ownerSVGElement;
+        let defs = svgRoot?.querySelector('defs');
+        if (!defs && svgRoot) {
+            defs = document.createElementNS(this.svgNS, 'defs');
+            svgRoot.insertBefore(defs, svgRoot.firstChild);
+        }
+        defs?.appendChild(mask);
+
+        // Apply mask to qr group to drop dots under logo
+        qrGroup.setAttribute('mask', `url(#${maskId})`);
+
+        // Outer (dark) stroke
+        const outer = document.createElementNS(this.svgNS, 'rect');
+        outer.setAttribute('x', insetX);
+        outer.setAttribute('y', insetY);
+        outer.setAttribute('width', bgSize);
+        outer.setAttribute('height', bgSize);
+        outer.setAttribute('rx', Math.floor(bgSize * 0.18));
+        outer.setAttribute('ry', Math.floor(bgSize * 0.18));
+        outer.setAttribute('fill', 'none');
+        outer.setAttribute('stroke', this.config.COLORS.CORNERS);
+        outer.setAttribute('stroke-width', Math.max(2, Math.round(this.config.QR.SIZE_PX / 60)));
+        logoBorderGroup.appendChild(outer);
+
+        // Inner (white) stroke
+        const inner = document.createElementNS(this.svgNS, 'rect');
+        const inset = Math.max(2, Math.round(this.config.QR.SIZE_PX / 80));
+        inner.setAttribute('x', insetX + inset);
+        inner.setAttribute('y', insetY + inset);
+        inner.setAttribute('width', bgSize - inset * 2);
+        inner.setAttribute('height', bgSize - inset * 2);
+        inner.setAttribute('rx', Math.floor((bgSize - inset * 2) * 0.18));
+        inner.setAttribute('ry', Math.floor((bgSize - inset * 2) * 0.18));
+        inner.setAttribute('fill', 'none');
+        inner.setAttribute('stroke', '#ffffff');
+        inner.setAttribute('stroke-width', Math.max(2, Math.round(this.config.QR.SIZE_PX / 90)));
+        logoBorderGroup.appendChild(inner);
+
+        group.appendChild(logoBorderGroup);
 
         // Brand (bottom, inside border)
         const brand = document.createElementNS(this.svgNS, 'text');
@@ -151,7 +228,7 @@ export class SVGBuilder {
         brand.setAttribute('font-family', this.config.BRAND.FONT_FAMILY);
         brand.setAttribute('font-size', this.config.BRAND.FONT_SIZE_PX);
         brand.setAttribute('font-weight', this.config.BRAND.FONT_WEIGHT);
-        brand.setAttribute('fill', this.config.BRAND.COLOR);
+        brand.setAttribute('fill', this.config.COLORS.CORNERS || this.config.BRAND.COLOR);
         brand.textContent = this.config.BRAND.TEXT;
         group.appendChild(brand);
 
@@ -297,15 +374,52 @@ export class SVGBuilder {
      * @returns {SVGElement} Background rect
      */
     createBackground() {
+        // Full background color
         const rect = document.createElementNS(this.svgNS, 'rect');
         rect.setAttribute('id', 'background');
         rect.setAttribute('x', '0');
         rect.setAttribute('y', '0');
         rect.setAttribute('width', this.config.STICKER.TOTAL_SIZE_PX);
         rect.setAttribute('height', this.config.STICKER.TOTAL_SIZE_PX);
-        rect.setAttribute('fill', '#FFFFFF');
+        rect.setAttribute('fill', this.config.COLORS.BACKGROUND || '#FFFFFF');
 
-        return rect;
+        // Outer double border (white then dark) aligned to bleed edge
+        const outerGroup = document.createElementNS(this.svgNS, 'g');
+        const total = this.config.STICKER.TOTAL_SIZE_PX;
+        const r = this.config.STICKER.CORNER_RADIUS_PX;
+        const outerStroke = this.config.FRAME.OUTER_STROKE_PX;
+        const innerStroke = this.config.FRAME.OUTER_INNER_STROKE_PX;
+
+        const whiteBorder = document.createElementNS(this.svgNS, 'rect');
+        whiteBorder.setAttribute('x', outerStroke / 2);
+        whiteBorder.setAttribute('y', outerStroke / 2);
+        whiteBorder.setAttribute('width', total - outerStroke);
+        whiteBorder.setAttribute('height', total - outerStroke);
+        whiteBorder.setAttribute('rx', r);
+        whiteBorder.setAttribute('ry', r);
+        whiteBorder.setAttribute('fill', 'none');
+        whiteBorder.setAttribute('stroke', '#ffffff');
+        whiteBorder.setAttribute('stroke-width', outerStroke);
+
+        const darkBorder = document.createElementNS(this.svgNS, 'rect');
+        const darkInset = outerStroke + innerStroke / 2;
+        darkBorder.setAttribute('x', darkInset);
+        darkBorder.setAttribute('y', darkInset);
+        darkBorder.setAttribute('width', total - darkInset * 2);
+        darkBorder.setAttribute('height', total - darkInset * 2);
+        darkBorder.setAttribute('rx', r);
+        darkBorder.setAttribute('ry', r);
+        darkBorder.setAttribute('fill', 'none');
+        darkBorder.setAttribute('stroke', this.config.COLORS.BORDER || this.config.FRAME.COLOR);
+        darkBorder.setAttribute('stroke-width', innerStroke);
+
+        outerGroup.appendChild(whiteBorder);
+        outerGroup.appendChild(darkBorder);
+
+        const group = document.createElementNS(this.svgNS, 'g');
+        group.appendChild(rect);
+        group.appendChild(outerGroup);
+        return group;
     }
 
     /**
@@ -395,7 +509,7 @@ export class SVGBuilder {
         const totalSize = this.config.STICKER.TOTAL_SIZE_PX;
         const qrSize = this.config.QR.SIZE_PX;
         const x = (totalSize - qrSize) / 2;
-        const y = (totalSize - qrSize) / 2 - 8; // Slightly higher to accommodate caption
+        const y = (totalSize - qrSize) / 2; // center vertically; caption is handled in framed layout
 
         group.setAttribute('transform', `translate(${x}, ${y})`);
 
@@ -485,7 +599,7 @@ export class SVGBuilder {
         const logoSize = this.config.LOGO.SIZE_PX;
         const padding = this.config.LOGO.BACKGROUND_PADDING;
         const x = (totalSize - logoSize) / 2;
-        const y = (totalSize - logoSize) / 2 - 8; // Match QR positioning
+        const y = (totalSize - logoSize) / 2; // center
 
         // Add white rounded-rect background (quadratic with rounded corners)
         const bgRect = document.createElementNS(this.svgNS, 'rect');
