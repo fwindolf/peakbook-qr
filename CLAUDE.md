@@ -258,33 +258,23 @@ NEXT_PUBLIC_QR_BASE_URL=https://peakbook.app/scan
 - Notification system for submitters
 - Batch operations support
 
-## Migration Path
+### QR Code Implementation
 
-The project is migrating from Vite/Vanilla JS to Next.js/TypeScript:
+The QR code generator is now fully integrated at `/qr-codes`:
 
-1. **Phase 1**: Set up Next.js project structure
-   - Initialize Next.js with App Router
-   - Configure TypeScript, ESLint, Prettier
-   - Set up Tailwind with design system
-   - Configure Supabase integration
+**Location**: `app/(admin)/qr-codes/`
+- `page.tsx` - Main QR interface
+- `actions.ts` - Server actions
+- `qr-form.tsx` - Interactive form component
 
-2. **Phase 2**: Migrate QR functionality
-   - Convert QR modules to TypeScript
-   - Create Next.js API routes for QR generation
-   - Build React components for QR UI
-   - Maintain backward compatibility
+**Core Libraries**: `lib/qr/`
+- `config.ts` - Configuration & constants
+- `types.ts` - TypeScript definitions
+- `validator.ts` - Input validation
+- `generator.ts` - QR code generation
+- `svg-builder.ts` - SVG sticker composition
 
-3. **Phase 3**: Add new features
-   - Peak management CRUD
-   - Translation management
-   - Approval engine
-   - Admin dashboard
-
-4. **Phase 4**: Polish & Deploy
-   - Comprehensive testing
-   - Performance optimization
-   - Documentation
-   - Deployment setup (Vercel)
+See `QR_MIGRATION.md` for detailed migration documentation.
 
 ## Common Tasks
 
