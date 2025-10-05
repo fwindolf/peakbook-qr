@@ -42,11 +42,14 @@ export function PeakForm({ peak }: PeakFormProps) {
     try {
       if (peak) {
         await updatePeak(peak.id, formData)
+        router.push(`/peaks/${peak.id}/edit`)
+        router.refresh()
       } else {
-        await createPeak(formData)
+        const newPeak = await createPeak(formData)
+        // Redirect to translations page after creating peak
+        router.push(`/translations?peak=${newPeak.id}`)
+        router.refresh()
       }
-      router.push("/peaks")
-      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")
       setLoading(false)

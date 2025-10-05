@@ -1,7 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Mountain, Users, FileText, CheckCircle, QrCode } from "lucide-react"
+import { getDashboardMetrics, getRecentActivity } from "./actions"
+import Link from "next/link"
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [metrics, activities] = await Promise.all([getDashboardMetrics(), getRecentActivity()])
+
   return (
     <div className="p-8 space-y-8">
       <div>
@@ -16,8 +20,8 @@ export default function DashboardPage() {
             <Mountain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <div className="text-2xl font-bold">{metrics.totalPeaks.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{metrics.peaksGrowth} from last month</p>
           </CardContent>
         </Card>
 
@@ -27,8 +31,8 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">5,678</div>
-            <p className="text-xs text-muted-foreground">+8% from last month</p>
+            <div className="text-2xl font-bold">{metrics.totalUsers.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{metrics.usersGrowth} from last month</p>
           </CardContent>
         </Card>
 
@@ -38,8 +42,8 @@ export default function DashboardPage() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12,345</div>
-            <p className="text-xs text-muted-foreground">+23% from last month</p>
+            <div className="text-2xl font-bold">{metrics.totalEntries.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">{metrics.entriesGrowth} from last month</p>
           </CardContent>
         </Card>
 
@@ -49,7 +53,7 @@ export default function DashboardPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">23</div>
+            <div className="text-2xl font-bold">{metrics.pendingModeration}</div>
             <p className="text-xs text-muted-foreground">Requires attention</p>
           </CardContent>
         </Card>
@@ -63,27 +67,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">New peak added: Zugspitze</p>
-                  <p className="text-xs text-muted-foreground">2 hours ago</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Translation completed for Matterhorn</p>
-                  <p className="text-xs text-muted-foreground">5 hours ago</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="h-2 w-2 rounded-full bg-primary mt-2" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium">Entry moderated and approved</p>
-                  <p className="text-xs text-muted-foreground">1 day ago</p>
-                </div>
-              </div>
+              {activities.length > 0 ? (
+                activities.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-4">
+                    <div className="h-2 w-2 rounded-full bg-primary mt-2" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{activity.message}</p>
+                      <p className="text-xs text-muted-foreground">{activity.timeAgo}</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No recent activity</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -94,18 +90,27 @@ export default function DashboardPage() {
             <CardDescription>Common administrative tasks</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+            <Link
+              href="/peaks"
+              className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
+            >
               <span className="text-sm font-medium">Create New Peak</span>
               <Mountain className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+            </Link>
+            <Link
+              href="/moderation"
+              className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
+            >
               <span className="text-sm font-medium">Review Pending Entries</span>
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors">
+            </Link>
+            <Link
+              href="/qr-codes"
+              className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted cursor-pointer transition-colors"
+            >
               <span className="text-sm font-medium">Generate QR Codes</span>
               <QrCode className="h-4 w-4 text-muted-foreground" />
-            </div>
+            </Link>
           </CardContent>
         </Card>
       </div>

@@ -31,19 +31,19 @@ export function AdminSidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col bg-sidebar border-r border-sidebar-border">
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
+      <div className="flex h-16 items-center border-b border-sidebar-border px-6">
         <Image
           src="/icons/logo.light.svg"
           alt="peakbook"
-          width={120}
-          height={32}
+          width={100}
+          height={28}
           className="dark:hidden"
         />
         <Image
           src="/icons/logo.dark.svg"
           alt="peakbook"
-          width={120}
-          height={32}
+          width={100}
+          height={28}
           className="hidden dark:block"
         />
       </div>

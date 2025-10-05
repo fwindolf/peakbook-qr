@@ -86,3 +86,20 @@ export async function deletePeak(id: string) {
 
   revalidatePath("/peaks")
 }
+
+export async function getPeakTranslations(peakId: string) {
+  const supabase = await getSupabaseServerClient()
+
+  const { data, error } = await supabase
+    .from("peaks_translations")
+    .select("*")
+    .eq("peak_id", peakId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[v0] Error fetching translations:", error)
+    return []
+  }
+
+  return data || []
+}

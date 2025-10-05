@@ -12,10 +12,10 @@ export default async function AnalyticsPage() {
   ])
 
   return (
-    <div className="space-y-6">
+    <div className="p-8 space-y-8">
       <div>
         <h1 className="text-3xl font-bold">Analytics</h1>
-        <p className="text-muted-foreground mt-1">Track user engagement and peak performance metrics</p>
+        <p className="text-muted-foreground mt-2">Track user engagement and peak performance metrics</p>
       </div>
 
       {/* User Metrics */}
@@ -84,7 +84,7 @@ export default async function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{userMetrics.inactiveUsers.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">No activity in 90 days</p>
+              <p className="text-xs text-muted-foreground mt-1">No activity in 30 days</p>
             </CardContent>
           </Card>
         </div>
@@ -159,7 +159,24 @@ export default async function AnalyticsPage() {
             <CardDescription>Peaks with the most visits</CardDescription>
           </CardHeader>
           <CardContent>
-            <TopPeaksChart data={peakMetrics.topPeaks} />
+            {peakMetrics.topPeaks.length > 0 ? (
+              <div className="space-y-3">
+                {peakMetrics.topPeaks.map((peak) => (
+                  <div key={peak.id} className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{peak.name}</p>
+                      <p className="text-sm text-muted-foreground">{peak.uniqueVisitors} unique visitors</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{peak.totalVisits}</p>
+                      <p className="text-xs text-muted-foreground">visits</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No peak data yet</p>
+            )}
           </CardContent>
         </Card>
 

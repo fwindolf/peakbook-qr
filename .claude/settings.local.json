@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npx playwright:*)",
-      "mcp__playwright__:*"
+      "mcp__playwright__:*",
+      "Bash(test:*)",
+      "Bash(cat:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

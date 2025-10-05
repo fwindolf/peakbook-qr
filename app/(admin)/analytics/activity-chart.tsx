@@ -21,17 +21,19 @@ export function ActivityChart({ data }: ActivityChartProps) {
   return (
     <ResponsiveContainer width="100%" height={350}>
       <LineChart data={formattedData}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-        <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-        <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+        <XAxis dataKey="date" tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} stroke="hsl(var(--border))" />
+        <YAxis tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} stroke="hsl(var(--border))" />
         <Tooltip
           contentStyle={{
             backgroundColor: "hsl(var(--card))",
             border: "1px solid hsl(var(--border))",
             borderRadius: "8px",
+            color: "hsl(var(--foreground))",
           }}
+          labelStyle={{ color: "hsl(var(--foreground))" }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: "hsl(var(--foreground))" }} />
         <Line
           type="monotone"
           dataKey="entries"

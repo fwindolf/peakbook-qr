@@ -1,60 +1,60 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Download, Loader2, AlertCircle } from 'lucide-react';
-import { generateQRCodeForPeak, getPeaks } from './actions';
+import { Download, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { generateQRCode, validateToken, generateRandomToken } from './actions';
 import { toast } from 'sonner';
 import { QR_CONFIG } from '@/lib/qr/config';
-
-interface Peak {
-  id: string;
-  name: string;
-  altitude: number | null;
-}
+import type { QRFormData, QRErrorCorrectionLevel } from '@/lib/qr/types';
 
 export function QRCodeForm() {
-  const [peaks, setPeaks] = useState<Peak[]>([]);
-  const [selectedPeakId, setSelectedPeakId] = useState<string>('');
-  const [caption, setCaption] = useState('');
+  const [formData, setFormData] = useState<QRFormData>({
+    token: '',
+    caption: '',
+    paramName: 'token',
+    eccLevel: 'Q',
+  });
+
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoadingPeaks, setIsLoadingPeaks] = useState(true);
   const [generatedSVG, setGeneratedSVG] = useState<string | null>(null);
   const [generatedURL, setGeneratedURL] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
+  const [tokenHelp, setTokenHelp] = useState<string>('Enter a 20-character token');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    loadPeaks();
-  }, []);
+  const handleTokenChange = async (value: string) => {
+    const sanitized = value.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 20);
+    setFormData({ ...formData, token: sanitized });
 
-  const loadPeaks = async () => {
-    setIsLoadingPeaks(true);
-    try {
-      const data = await getPeaks();
-      setPeaks(data);
-    } catch (error) {
-      toast.error('Failed to load peaks');
-      console.error(error);
-    } finally {
-      setIsLoadingPeaks(false);
+    // Validate token
+    const result = await validateToken(sanitized);
+    setTokenHelp(result.helpText || '');
+    if (result.error) {
+      setErrors({ ...errors, token: result.error });
+    } else {
+      const newErrors = { ...errors };
+      delete newErrors.token;
+      setErrors(newErrors);
     }
   };
 
-  const handleGenerate = async () => {
-    if (!selectedPeakId) {
-      toast.error('Please select a peak');
-      return;
-    }
+  const handleGenerateRandom = async () => {
+    const token = await generateRandomToken();
+    handleTokenChange(token);
+  };
 
+  const handleGenerate = async () => {
     setIsGenerating(true);
+    setErrors({});
 
     try {
-      const result = await generateQRCodeForPeak(selectedPeakId, caption);
+      const result = await generateQRCode(formData);
 
       if (result.success && result.data) {
         setGeneratedSVG(result.data.svg);
@@ -63,6 +63,9 @@ export function QRCodeForm() {
         toast.success('QR code generated successfully!');
       } else {
         toast.error(result.error || 'Failed to generate QR code');
+        if (result.errors) {
+          setErrors(result.errors);
+        }
       }
     } catch (error) {
       toast.error('An unexpected error occurred');
@@ -87,7 +90,7 @@ export function QRCodeForm() {
     toast.success('SVG downloaded successfully!');
   };
 
-  const selectedPeak = peaks.find((p) => p.id === selectedPeakId);
+  const isFormValid = formData.token.length === 20 && !errors.token;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -95,30 +98,34 @@ export function QRCodeForm() {
       <Card>
         <CardHeader>
           <CardTitle>QR Code Settings</CardTitle>
-          <CardDescription>Select a peak to generate its QR code sticker</CardDescription>
+          <CardDescription>Configure your QR code sticker parameters</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Peak Selection */}
+          {/* Token Input */}
           <div className="space-y-2">
-            <Label htmlFor="peak">Peak *</Label>
-            <Select value={selectedPeakId} onValueChange={setSelectedPeakId} disabled={isLoadingPeaks}>
-              <SelectTrigger id="peak">
-                <SelectValue placeholder={isLoadingPeaks ? 'Loading peaks...' : 'Select a peak'} />
-              </SelectTrigger>
-              <SelectContent>
-                {peaks.map((peak) => (
-                  <SelectItem key={peak.id} value={peak.id}>
-                    {peak.name} {peak.altitude ? `(${peak.altitude}m)` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedPeak && (
-              <p className="text-sm text-muted-foreground">
-                Selected: {selectedPeak.name}
-                {selectedPeak.altitude ? ` - ${selectedPeak.altitude}m` : ''}
-              </p>
-            )}
+            <Label htmlFor="token">Token *</Label>
+            <div className="flex gap-2">
+              <Input
+                id="token"
+                value={formData.token}
+                onChange={(e) => handleTokenChange(e.target.value)}
+                placeholder="ABCD1234EFGH5678IJKL"
+                maxLength={20}
+                className={errors.token ? 'border-destructive' : ''}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleGenerateRandom}
+                title="Generate random token"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+            </div>
+            <p className={`text-sm ${errors.token ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {tokenHelp}
+            </p>
           </div>
 
           {/* Caption Input */}
@@ -126,28 +133,42 @@ export function QRCodeForm() {
             <Label htmlFor="caption">Caption (Optional)</Label>
             <Input
               id="caption"
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
+              value={formData.caption}
+              onChange={(e) => setFormData({ ...formData, caption: e.target.value })}
               placeholder="Scan to check in!"
               maxLength={50}
             />
             <p className="text-sm text-muted-foreground">
-              {caption?.length || 0} / {QR_CONFIG.CAPTION.MAX_LENGTH}
+              {formData.caption?.length || 0} / {QR_CONFIG.CAPTION.MAX_LENGTH}
             </p>
           </div>
 
-          {/* Info Alert */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {selectedPeakId
-                ? 'A QR code will be generated or retrieved for this peak. Each peak has a unique QR code token.'
-                : 'QR codes are automatically managed per peak. If a QR code exists, it will be reused.'}
-            </AlertDescription>
-          </Alert>
+          {/* Error Correction Level */}
+          <div className="space-y-2">
+            <Label htmlFor="ecc">Error Correction Level</Label>
+            <Select
+              value={formData.eccLevel}
+              onValueChange={(value) => setFormData({ ...formData, eccLevel: value as QRErrorCorrectionLevel })}
+            >
+              <SelectTrigger id="ecc">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="L">Low (7% recovery)</SelectItem>
+                <SelectItem value="M">Medium (15% recovery)</SelectItem>
+                <SelectItem value="Q">Quartile (25% recovery) - Recommended</SelectItem>
+                <SelectItem value="H">High (30% recovery)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Generate Button */}
-          <Button onClick={handleGenerate} disabled={!selectedPeakId || isGenerating} className="w-full" size="lg">
+          <Button
+            onClick={handleGenerate}
+            disabled={!isFormValid || isGenerating}
+            className="w-full"
+            size="lg"
+          >
             {isGenerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -173,7 +194,10 @@ export function QRCodeForm() {
             <div className="space-y-4">
               {/* SVG Preview */}
               <div className="flex justify-center bg-muted p-6 rounded-lg">
-                <div dangerouslySetInnerHTML={{ __html: generatedSVG }} className="max-w-sm w-full" />
+                <div
+                  dangerouslySetInnerHTML={{ __html: generatedSVG }}
+                  className="max-w-sm w-full"
+                />
               </div>
 
               {/* Download Button */}

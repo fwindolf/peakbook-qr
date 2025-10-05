@@ -30,7 +30,10 @@ export function TranslationsTable({ translations, peaks }: TranslationsTableProp
     setGenerating(`${peakId}-${languageCode}`)
     try {
       const peak = peaks.find((p) => p.id === peakId)
-      if (!peak) return
+      if (!peak) {
+        alert('Peak not found')
+        return
+      }
 
       await generateTranslation(peakId, languageCode, {
         name: peak.name,
@@ -40,6 +43,9 @@ export function TranslationsTable({ translations, peaks }: TranslationsTableProp
       router.refresh()
     } catch (error) {
       console.error("[v0] Failed to generate translation:", error)
+      // Display error to user
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate translation'
+      alert(`Error: ${errorMessage}`)
     } finally {
       setGenerating(null)
     }

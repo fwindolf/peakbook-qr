@@ -5,6 +5,7 @@ import { svgBuilder } from '@/lib/qr/svg-builder';
 import { qrValidator } from '@/lib/qr/validator';
 import { QR_CONFIG, QRConfigUtils } from '@/lib/qr/config';
 import type { QRFormData, QRErrorCorrectionLevel } from '@/lib/qr/types';
+import { getSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function generateQRCode(formData: QRFormData) {
   try {
@@ -70,4 +71,66 @@ export async function generateRandomToken() {
     token += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return token;
+}
+
+export async function getPeaks() {
+  const supabase = await getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('peaks')
+    .select('id, name, altitude')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching peaks:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function generateQRCodeForPeak(peakId: string, caption?: string) {
+  const supabase = await getSupabaseServerClient();
+
+  // Check if QR code already exists for this peak
+  const { data: existingQR } = await supabase
+    .from('qr_codes')
+    .select('token')
+    .eq('peak_id', peakId)
+    .single();
+
+  let token: string;
+
+  if (existingQR) {
+    // Use existing token
+    token = existingQR.token;
+  } else {
+    // Generate new token
+    token = await generateRandomToken();
+
+    // Save to database
+    const { error: insertError } = await supabase
+      .from('qr_codes')
+      .insert({
+        peak_id: peakId,
+        token: token,
+      });
+
+    if (insertError) {
+      console.error('Error saving QR code:', insertError);
+      return {
+        success: false,
+        error: 'Failed to save QR code to database',
+      };
+    }
+  }
+
+  // Generate QR code with the token
+  const formData: QRFormData = {
+    token,
+    caption: caption || '',
+    paramName: 'token',
+    eccLevel: 'Q',
+  };
+
+  return generateQRCode(formData);
 }

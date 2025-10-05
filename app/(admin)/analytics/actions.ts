@@ -1,6 +1,6 @@
 "use server"
 
-import { createServerClient } from "@/lib/supabase/server"
+import { getSupabaseServerClient } from "@/lib/supabase/server"
 
 export interface UserMetrics {
   mau: number
@@ -37,7 +37,7 @@ export interface ActivityData {
 }
 
 export async function getUserMetrics(): Promise<UserMetrics> {
-  const supabase = await createServerClient()
+  const supabase = await getSupabaseServerClient()
 
   const now = new Date()
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
@@ -89,12 +89,11 @@ export async function getUserMetrics(): Promise<UserMetrics> {
 
   const highlyEngagedUsers = Object.values(userEntryCounts).filter((count) => count >= 5).length
 
-  // Inactive users (no entries in last 90 days)
-  const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+  // Inactive users (no entries in last 30 days)
   const { data: activeUserIds } = await supabase
     .from("peak_entries")
     .select("user_id")
-    .gte("created_at", threeMonthsAgo.toISOString())
+    .gte("created_at", monthAgo.toISOString())
 
   const activeUsers = new Set(activeUserIds?.map((e) => e.user_id) || [])
   const inactiveUsers = (totalUsers || 0) - activeUsers.size
@@ -110,69 +109,70 @@ export async function getUserMetrics(): Promise<UserMetrics> {
 }
 
 export async function getPeakMetrics(): Promise<PeakMetrics> {
-  const supabase = await createServerClient()
+  const supabase = await getSupabaseServerClient()
 
   // Total peaks
   const { count: totalPeaks } = await supabase.from("peaks").select("*", { count: "exact", head: true })
 
-  // Get peak stats
-  const { data: peakStats } = await supabase.from("peak_stats").select("peak_id, unique_visitors, total_visits")
+  // Get all peak entries to calculate stats
+  const { data: allEntries } = await supabase.from("peak_entries").select("peak_id, user_id")
+
+  // Calculate stats by peak
+  const peakStatsMap = new Map<
+    string,
+    {
+      totalVisits: number
+      uniqueVisitors: Set<string>
+    }
+  >()
+
+  allEntries?.forEach((entry) => {
+    if (!peakStatsMap.has(entry.peak_id)) {
+      peakStatsMap.set(entry.peak_id, {
+        totalVisits: 0,
+        uniqueVisitors: new Set(),
+      })
+    }
+    const stats = peakStatsMap.get(entry.peak_id)!
+    stats.totalVisits++
+    stats.uniqueVisitors.add(entry.user_id)
+  })
 
   // Peaks with entries
-  const peaksWithEntries = peakStats?.filter((s) => s.total_visits > 0).length || 0
+  const peaksWithEntries = peakStatsMap.size
   const unvisitedPeaks = (totalPeaks || 0) - peaksWithEntries
 
   // Average entries per peak
-  const totalVisits = peakStats?.reduce((sum, s) => sum + s.total_visits, 0) || 0
+  const totalVisits = Array.from(peakStatsMap.values()).reduce((sum, s) => sum + s.totalVisits, 0)
   const averageEntriesPerPeak = totalPeaks ? totalVisits / totalPeaks : 0
 
-  // Top peaks (most visited)
-  const { data: topPeaksData } = await supabase
-    .from("peaks")
-    .select(`
-      id,
-      name,
-      peak_stats (
-        unique_visitors,
-        total_visits
-      )
-    `)
-    .order("peak_stats(total_visits)", { ascending: false })
-    .limit(10)
+  // Get peak names for top/unpopular peaks
+  const { data: peaks } = await supabase.from("peaks").select("id, name")
 
-  const topPeaks =
-    topPeaksData
-      ?.map((p) => ({
-        id: p.id,
-        name: p.name,
-        totalVisits: (p.peak_stats as any)?.[0]?.total_visits || 0,
-        uniqueVisitors: (p.peak_stats as any)?.[0]?.unique_visitors || 0,
-      }))
-      .filter((p) => p.totalVisits > 0) || []
+  const peaksById = new Map(peaks?.map((p) => [p.id, p.name]) || [])
+
+  // Top peaks (most visited)
+  const topPeaks = Array.from(peakStatsMap.entries())
+    .map(([peakId, stats]) => ({
+      id: peakId,
+      name: peaksById.get(peakId) || "Unknown",
+      totalVisits: stats.totalVisits,
+      uniqueVisitors: stats.uniqueVisitors.size,
+    }))
+    .sort((a, b) => b.totalVisits - a.totalVisits)
+    .slice(0, 10)
 
   // Unpopular peaks (least visited, but not zero)
-  const { data: unpopularPeaksData } = await supabase
-    .from("peaks")
-    .select(`
-      id,
-      name,
-      peak_stats (
-        unique_visitors,
-        total_visits
-      )
-    `)
-    .order("peak_stats(total_visits)", { ascending: true })
-    .limit(10)
-
-  const unpopularPeaks =
-    unpopularPeaksData
-      ?.map((p) => ({
-        id: p.id,
-        name: p.name,
-        totalVisits: (p.peak_stats as any)?.[0]?.total_visits || 0,
-        uniqueVisitors: (p.peak_stats as any)?.[0]?.unique_visitors || 0,
-      }))
-      .filter((p) => p.totalVisits > 0 && p.totalVisits < 10) || []
+  const unpopularPeaks = Array.from(peakStatsMap.entries())
+    .map(([peakId, stats]) => ({
+      id: peakId,
+      name: peaksById.get(peakId) || "Unknown",
+      totalVisits: stats.totalVisits,
+      uniqueVisitors: stats.uniqueVisitors.size,
+    }))
+    .filter((p) => p.totalVisits > 0 && p.totalVisits < 10)
+    .sort((a, b) => a.totalVisits - b.totalVisits)
+    .slice(0, 10)
 
   return {
     totalPeaks: totalPeaks || 0,
@@ -185,7 +185,7 @@ export async function getPeakMetrics(): Promise<PeakMetrics> {
 }
 
 export async function getActivityData(days = 30): Promise<ActivityData[]> {
-  const supabase = await createServerClient()
+  const supabase = await getSupabaseServerClient()
 
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)

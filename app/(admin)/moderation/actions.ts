@@ -8,9 +8,9 @@ export async function getPendingEntries() {
 
   const { data, error } = await supabase
     .from("peak_entries")
-    .select("*, peaks(name), profiles(username)")
+    .select("*, peaks(name), profiles(profile_name, public)")
     .eq("image_approved", false)
-    .not("image_url", "is", null)
+    .not("photo_url", "is", null)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -54,7 +54,6 @@ export async function rejectEntry(entryId: string, reason?: string) {
     .from("peak_entries")
     .update({
       image_approved: false,
-      image_url: null,
       photo_url: null,
       moderated_by: user?.id,
       moderated_at: new Date().toISOString(),
@@ -86,7 +85,7 @@ export async function getUntranslatedPeaks() {
 
   // Get all translations
   const { data: translations, error: translationsError } = await supabase
-    .from("peak_translations")
+    .from("peaks_translations")
     .select("peak_id, language_code")
 
   if (translationsError) {
@@ -119,7 +118,7 @@ export async function getModerationStats() {
       .from("peak_entries")
       .select("id", { count: "exact", head: true })
       .eq("image_approved", false)
-      .not("image_url", "is", null),
+      .not("photo_url", "is", null),
     supabase.from("peak_entries").select("id", { count: "exact", head: true }),
     getUntranslatedPeaks(),
     supabase.from("peaks").select("id", { count: "exact", head: true }),

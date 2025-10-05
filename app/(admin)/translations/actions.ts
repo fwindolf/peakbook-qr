@@ -7,7 +7,7 @@ import { generateText } from "ai"
 export async function getTranslations(peakId?: string) {
   const supabase = await getSupabaseServerClient()
 
-  let query = supabase.from("peak_translations").select("*, peaks(name)").order("created_at", { ascending: false })
+  let query = supabase.from("peaks_translations").select("*, peaks(name)").order("created_at", { ascending: false })
 
   if (peakId) {
     query = query.eq("peak_id", peakId)
@@ -115,7 +115,7 @@ Region: ${sourceText.region}`,
 
     // Save translation to database
     const { data, error } = await supabase
-      .from("peak_translations")
+      .from("peaks_translations")
       .insert({
         peak_id: peakId,
         language_code: languageCode,
@@ -159,7 +159,7 @@ export async function updateTranslation(
   } = await supabase.auth.getUser()
 
   const { data, error } = await supabase
-    .from("peak_translations")
+    .from("peaks_translations")
     .update({
       ...updates,
       is_auto_translated: false,
@@ -183,7 +183,7 @@ export async function updateTranslation(
 export async function deleteTranslation(id: string) {
   const supabase = await getSupabaseServerClient()
 
-  const { error } = await supabase.from("peak_translations").delete().eq("id", id)
+  const { error } = await supabase.from("peaks_translations").delete().eq("id", id)
 
   if (error) {
     console.error("[v0] Error deleting translation:", error)
