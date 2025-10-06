@@ -3,12 +3,11 @@ import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Analytics } from "@vercel/analytics/next"
-import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "peakbook Admin",
-  description: "Administrative platform for managing peakbook content and operations",
+  title: "peakbook - Capture summits. Share your moment. Stay in touch",
+  description: "The digital summit book for hikers. Scan QR codes at mountain peaks, share your moments, and connect with fellow adventurers.",
   generator: "v0.app",
 }
 
@@ -18,9 +17,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Suspense fallback={<div>Loading...</div>}>{children}</Suspense>
+        {children}
         <Analytics />
       </body>
     </html>

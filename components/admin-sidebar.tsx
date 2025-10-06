@@ -3,22 +3,25 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { cn } from "@/lib/utils"
-import { Mountain, LayoutDashboard, Languages, QrCode, CheckSquare, BarChart3, LogOut } from "lucide-react"
+import { Mountain, LayoutDashboard, Languages, QrCode, CheckSquare, BarChart3, LogOut, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { LocaleSwitcher } from "@/components/locale-switcher"
 
-const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Peaks", href: "/peaks", icon: Mountain },
-  { name: "Translations", href: "/translations", icon: Languages },
-  { name: "QR Codes", href: "/qr-codes", icon: QrCode },
-  { name: "Moderation", href: "/moderation", icon: CheckSquare },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
+const navigationItems = [
+  { key: "dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { key: "peaks", href: "/admin/peaks", icon: Mountain },
+  { key: "translations", href: "/admin/translations", icon: Languages },
+  { key: "qrCodes", href: "/admin/qr-codes", icon: QrCode },
+  { key: "moderation", href: "/admin/moderation", icon: CheckSquare },
+  { key: "analytics", href: "/admin/analytics", icon: BarChart3 },
 ]
 
 export function AdminSidebar() {
+  const t = useTranslations("nav")
   const pathname = usePathname()
   const router = useRouter()
   const supabase = getSupabaseBrowserClient()
@@ -48,11 +51,11 @@ export function AdminSidebar() {
         />
       </div>
       <nav className="flex-1 space-y-1 p-4">
-        {navigation.map((item) => {
+        {navigationItems.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + "/")
           return (
             <Link
-              key={item.name}
+              key={item.key}
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -62,19 +65,20 @@ export function AdminSidebar() {
               )}
             >
               <item.icon className="h-5 w-5" />
-              {item.name}
+              {t(item.key)}
             </Link>
           )
         })}
       </nav>
-      <div className="border-t border-sidebar-border p-4">
+      <div className="border-t border-sidebar-border p-4 space-y-2">
+        <LocaleSwitcher />
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-sidebar-foreground/70 hover:text-sidebar-foreground"
           onClick={handleLogout}
         >
           <LogOut className="h-5 w-5" />
-          Sign Out
+          {t("logout")}
         </Button>
       </div>
     </div>

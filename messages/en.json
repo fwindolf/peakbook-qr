@@ -1,0 +1,253 @@
+{
+  "common": {
+    "appName": "peakbook Admin",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "actions": "Actions",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "peaks": "Peaks",
+    "qrCodes": "QR Codes",
+    "translations": "Translations",
+    "moderation": "Moderation",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "loginTitle": "Sign in to peakbook Admin",
+    "loginDescription": "Sign in to access the admin features",
+    "invalidCredentials": "Invalid credentials",
+    "loginError": "Error signing in. Please try again."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back",
+    "overview": "Overview",
+    "recentActivity": "Recent Activity",
+    "stats": {
+      "totalPeaks": "Total Peaks",
+      "pendingModeration": "Pending Moderation",
+      "totalQrCodes": "Total QR Codes",
+      "pendingTranslations": "Pending Translations"
+    }
+  },
+  "peaks": {
+    "title": "Peaks",
+    "createPeak": "Create Peak",
+    "editPeak": "Edit Peak",
+    "deletePeak": "Delete Peak",
+    "peakDetails": "Peak Details",
+    "noPeaks": "No peaks found",
+    "searchPeaks": "Search peaks...",
+    "fields": {
+      "name": "Name",
+      "elevation": "Elevation",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "region": "Region",
+      "difficulty": "Difficulty",
+      "description": "Description",
+      "status": "Status",
+      "createdAt": "Created at",
+      "updatedAt": "Updated at"
+    },
+    "status": {
+      "draft": "Draft",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "difficulty": {
+      "easy": "Easy",
+      "moderate": "Moderate",
+      "difficult": "Difficult",
+      "expert": "Expert"
+    },
+    "success": {
+      "created": "Peak created successfully",
+      "updated": "Peak updated successfully",
+      "deleted": "Peak deleted successfully"
+    },
+    "errors": {
+      "createFailed": "Failed to create peak",
+      "updateFailed": "Failed to update peak",
+      "deleteFailed": "Failed to delete peak",
+      "loadFailed": "Failed to load peaks"
+    }
+  },
+  "qrCodes": {
+    "title": "QR Codes",
+    "generateQrCode": "Generate QR Code",
+    "downloadQrCode": "Download QR Code",
+    "qrCodeDetails": "QR Code Details",
+    "noQrCodes": "No QR codes found",
+    "fields": {
+      "token": "Token",
+      "peak": "Peak",
+      "createdAt": "Created at",
+      "format": "Format",
+      "size": "Size"
+    },
+    "settings": {
+      "errorCorrection": "Error Correction",
+      "logoSize": "Logo Size",
+      "includeBleed": "Include Bleed",
+      "stickerSize": "Sticker Size"
+    },
+    "success": {
+      "generated": "QR code generated successfully",
+      "downloaded": "QR code downloaded successfully"
+    },
+    "errors": {
+      "generateFailed": "Failed to generate QR code",
+      "invalidToken": "Invalid token (20 characters, A-Z, 0-9)",
+      "downloadFailed": "Failed to download QR code"
+    }
+  },
+  "translations": {
+    "title": "Translations",
+    "addTranslation": "Add Translation",
+    "editTranslation": "Edit Translation",
+    "deleteTranslation": "Delete Translation",
+    "noTranslations": "No translations found",
+    "fields": {
+      "language": "Language",
+      "originalText": "Original Text",
+      "translatedText": "Translated Text",
+      "status": "Status",
+      "translator": "Translator"
+    },
+    "languages": {
+      "en": "English",
+      "de": "German",
+      "fr": "French",
+      "it": "Italian",
+      "es": "Spanish"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "success": {
+      "created": "Translation created successfully",
+      "updated": "Translation updated successfully",
+      "deleted": "Translation deleted successfully",
+      "approved": "Translation approved successfully"
+    },
+    "errors": {
+      "createFailed": "Failed to create translation",
+      "updateFailed": "Failed to update translation",
+      "deleteFailed": "Failed to delete translation",
+      "loadFailed": "Failed to load translations"
+    }
+  },
+  "moderation": {
+    "title": "Moderation",
+    "queue": "Queue",
+    "approve": "Approve",
+    "reject": "Reject",
+    "requestChanges": "Request Changes",
+    "noPendingItems": "No pending items",
+    "fields": {
+      "type": "Type",
+      "submittedBy": "Submitted by",
+      "submittedAt": "Submitted at",
+      "moderatedBy": "Moderated by",
+      "moderatedAt": "Moderated at",
+      "notes": "Notes",
+      "reason": "Reason"
+    },
+    "types": {
+      "peak": "Peak",
+      "translation": "Translation",
+      "image": "Image",
+      "entry": "Entry"
+    },
+    "success": {
+      "approved": "Item approved successfully",
+      "rejected": "Item rejected successfully",
+      "changesRequested": "Changes requested successfully"
+    },
+    "errors": {
+      "actionFailed": "Failed to perform moderation action",
+      "loadFailed": "Failed to load moderation queue"
+    }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "overview": "Overview",
+    "peakActivity": "Peak Activity",
+    "topPeaks": "Top Peaks",
+    "userEngagement": "User Engagement",
+    "timeRange": {
+      "today": "Today",
+      "week": "Week",
+      "month": "Month",
+      "year": "Year",
+      "all": "All"
+    },
+    "metrics": {
+      "totalVisits": "Total Visits",
+      "uniqueUsers": "Unique Users",
+      "averageRating": "Average Rating",
+      "totalEntries": "Total Entries"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "account": "Account",
+    "preferences": "Preferences",
+    "language": "Language",
+    "theme": "Theme",
+    "notifications": "Notifications",
+    "success": {
+      "saved": "Settings saved successfully"
+    },
+    "errors": {
+      "saveFailed": "Failed to save settings"
+    }
+  },
+  "errors": {
+    "general": "An error occurred",
+    "notFound": "Not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Forbidden",
+    "serverError": "Server error",
+    "networkError": "Network error",
+    "validationError": "Validation error",
+    "tryAgain": "Please try again"
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Invalid email address",
+    "minLength": "Minimum {min} characters required",
+    "maxLength": "Maximum {max} characters allowed",
+    "number": "Must be a number",
+    "positive": "Must be a positive number",
+    "url": "Invalid URL",
+    "pattern": "Invalid format"
+  }
+}

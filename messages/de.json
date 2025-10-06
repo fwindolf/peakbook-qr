@@ -1,0 +1,253 @@
+{
+  "common": {
+    "appName": "peakbook Admin",
+    "loading": "Lädt...",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "search": "Suchen",
+    "filter": "Filtern",
+    "actions": "Aktionen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "previous": "Zurück",
+    "submit": "Absenden",
+    "confirm": "Bestätigen",
+    "close": "Schließen",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "peaks": "Gipfel",
+    "qrCodes": "QR-Codes",
+    "translations": "Übersetzungen",
+    "moderation": "Moderation",
+    "analytics": "Statistiken",
+    "settings": "Einstellungen",
+    "logout": "Abmelden"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "loginTitle": "Bei peakbook Admin anmelden",
+    "loginDescription": "Melden Sie sich an, um auf die Admin-Funktionen zuzugreifen",
+    "invalidCredentials": "Ungültige Anmeldedaten",
+    "loginError": "Fehler beim Anmelden. Bitte versuchen Sie es erneut."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Willkommen zurück",
+    "overview": "Übersicht",
+    "recentActivity": "Letzte Aktivitäten",
+    "stats": {
+      "totalPeaks": "Gipfel gesamt",
+      "pendingModeration": "Ausstehende Moderation",
+      "totalQrCodes": "QR-Codes gesamt",
+      "pendingTranslations": "Ausstehende Übersetzungen"
+    }
+  },
+  "peaks": {
+    "title": "Gipfel",
+    "createPeak": "Gipfel erstellen",
+    "editPeak": "Gipfel bearbeiten",
+    "deletePeak": "Gipfel löschen",
+    "peakDetails": "Gipfeldetails",
+    "noPeaks": "Keine Gipfel gefunden",
+    "searchPeaks": "Gipfel suchen...",
+    "fields": {
+      "name": "Name",
+      "elevation": "Höhe",
+      "latitude": "Breitengrad",
+      "longitude": "Längengrad",
+      "region": "Region",
+      "difficulty": "Schwierigkeit",
+      "description": "Beschreibung",
+      "status": "Status",
+      "createdAt": "Erstellt am",
+      "updatedAt": "Aktualisiert am"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "pending": "Ausstehend",
+      "approved": "Genehmigt",
+      "rejected": "Abgelehnt"
+    },
+    "difficulty": {
+      "easy": "Leicht",
+      "moderate": "Mittel",
+      "difficult": "Schwierig",
+      "expert": "Experte"
+    },
+    "success": {
+      "created": "Gipfel erfolgreich erstellt",
+      "updated": "Gipfel erfolgreich aktualisiert",
+      "deleted": "Gipfel erfolgreich gelöscht"
+    },
+    "errors": {
+      "createFailed": "Fehler beim Erstellen des Gipfels",
+      "updateFailed": "Fehler beim Aktualisieren des Gipfels",
+      "deleteFailed": "Fehler beim Löschen des Gipfels",
+      "loadFailed": "Fehler beim Laden der Gipfel"
+    }
+  },
+  "qrCodes": {
+    "title": "QR-Codes",
+    "generateQrCode": "QR-Code generieren",
+    "downloadQrCode": "QR-Code herunterladen",
+    "qrCodeDetails": "QR-Code Details",
+    "noQrCodes": "Keine QR-Codes gefunden",
+    "fields": {
+      "token": "Token",
+      "peak": "Gipfel",
+      "createdAt": "Erstellt am",
+      "format": "Format",
+      "size": "Größe"
+    },
+    "settings": {
+      "errorCorrection": "Fehlerkorrektur",
+      "logoSize": "Logo-Größe",
+      "includeBleed": "Beschnitt einbeziehen",
+      "stickerSize": "Sticker-Größe"
+    },
+    "success": {
+      "generated": "QR-Code erfolgreich generiert",
+      "downloaded": "QR-Code erfolgreich heruntergeladen"
+    },
+    "errors": {
+      "generateFailed": "Fehler beim Generieren des QR-Codes",
+      "invalidToken": "Ungültiger Token (20 Zeichen, A-Z, 0-9)",
+      "downloadFailed": "Fehler beim Herunterladen des QR-Codes"
+    }
+  },
+  "translations": {
+    "title": "Übersetzungen",
+    "addTranslation": "Übersetzung hinzufügen",
+    "editTranslation": "Übersetzung bearbeiten",
+    "deleteTranslation": "Übersetzung löschen",
+    "noTranslations": "Keine Übersetzungen gefunden",
+    "fields": {
+      "language": "Sprache",
+      "originalText": "Originaltext",
+      "translatedText": "Übersetzter Text",
+      "status": "Status",
+      "translator": "Übersetzer"
+    },
+    "languages": {
+      "en": "Englisch",
+      "de": "Deutsch",
+      "fr": "Französisch",
+      "it": "Italienisch",
+      "es": "Spanisch"
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "approved": "Genehmigt",
+      "rejected": "Abgelehnt"
+    },
+    "success": {
+      "created": "Übersetzung erfolgreich erstellt",
+      "updated": "Übersetzung erfolgreich aktualisiert",
+      "deleted": "Übersetzung erfolgreich gelöscht",
+      "approved": "Übersetzung erfolgreich genehmigt"
+    },
+    "errors": {
+      "createFailed": "Fehler beim Erstellen der Übersetzung",
+      "updateFailed": "Fehler beim Aktualisieren der Übersetzung",
+      "deleteFailed": "Fehler beim Löschen der Übersetzung",
+      "loadFailed": "Fehler beim Laden der Übersetzungen"
+    }
+  },
+  "moderation": {
+    "title": "Moderation",
+    "queue": "Warteschlange",
+    "approve": "Genehmigen",
+    "reject": "Ablehnen",
+    "requestChanges": "Änderungen anfordern",
+    "noPendingItems": "Keine ausstehenden Elemente",
+    "fields": {
+      "type": "Typ",
+      "submittedBy": "Eingereicht von",
+      "submittedAt": "Eingereicht am",
+      "moderatedBy": "Moderiert von",
+      "moderatedAt": "Moderiert am",
+      "notes": "Notizen",
+      "reason": "Grund"
+    },
+    "types": {
+      "peak": "Gipfel",
+      "translation": "Übersetzung",
+      "image": "Bild",
+      "entry": "Eintrag"
+    },
+    "success": {
+      "approved": "Element erfolgreich genehmigt",
+      "rejected": "Element erfolgreich abgelehnt",
+      "changesRequested": "Änderungen erfolgreich angefordert"
+    },
+    "errors": {
+      "actionFailed": "Fehler beim Ausführen der Moderationsaktion",
+      "loadFailed": "Fehler beim Laden der Moderationswarteschlange"
+    }
+  },
+  "analytics": {
+    "title": "Statistiken",
+    "overview": "Übersicht",
+    "peakActivity": "Gipfelaktivität",
+    "topPeaks": "Top Gipfel",
+    "userEngagement": "Benutzerengagement",
+    "timeRange": {
+      "today": "Heute",
+      "week": "Woche",
+      "month": "Monat",
+      "year": "Jahr",
+      "all": "Alle"
+    },
+    "metrics": {
+      "totalVisits": "Besuche gesamt",
+      "uniqueUsers": "Eindeutige Benutzer",
+      "averageRating": "Durchschnittsbewertung",
+      "totalEntries": "Einträge gesamt"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "general": "Allgemein",
+    "account": "Konto",
+    "preferences": "Einstellungen",
+    "language": "Sprache",
+    "theme": "Design",
+    "notifications": "Benachrichtigungen",
+    "success": {
+      "saved": "Einstellungen erfolgreich gespeichert"
+    },
+    "errors": {
+      "saveFailed": "Fehler beim Speichern der Einstellungen"
+    }
+  },
+  "errors": {
+    "general": "Ein Fehler ist aufgetreten",
+    "notFound": "Nicht gefunden",
+    "unauthorized": "Nicht autorisiert",
+    "forbidden": "Verboten",
+    "serverError": "Serverfehler",
+    "networkError": "Netzwerkfehler",
+    "validationError": "Validierungsfehler",
+    "tryAgain": "Bitte versuchen Sie es erneut"
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "email": "Ungültige E-Mail-Adresse",
+    "minLength": "Mindestens {min} Zeichen erforderlich",
+    "maxLength": "Maximal {max} Zeichen erlaubt",
+    "number": "Muss eine Nummer sein",
+    "positive": "Muss eine positive Zahl sein",
+    "url": "Ungültige URL",
+    "pattern": "Ungültiges Format"
+  }
+}
